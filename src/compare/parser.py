@@ -69,12 +69,20 @@ def _detect_columns(row):
         c = str(cell).lower().strip()
         if col_ean is None and any(kw in c for kw in _EAN_KW):
             col_ean = i
-        if col_sku is None and any(kw in c for kw in _SKU_KW) and col_ean != i:
+        elif col_sku is None and any(kw in c for kw in _SKU_KW):
             col_sku = i
-        if col_product is None and any(kw in c for kw in _PRODUCT_KW):
+        elif col_product is None and any(kw in c for kw in _PRODUCT_KW):
             col_product = i
-        if col_quantity is None and any(kw in c for kw in _QUANTITY_KW):
+        elif col_quantity is None and any(kw in c for kw in _QUANTITY_KW):
             col_quantity = i
+
+    # Fallback: wenn Quantity erkannt aber kein Identifier, nimm die erste nicht-Quantity-Spalte
+    if col_quantity is not None and not _has_identifier(col_ean, col_sku, col_product):
+        for i, cell in enumerate(row):
+            if i != col_quantity and cell and str(cell).strip():
+                col_product = i
+                break
+
     return col_ean, col_sku, col_product, col_quantity
 
 
@@ -132,7 +140,7 @@ def _parse_excel(filepath):
         wb.close()
         raise ValueError(
             "Konnte keine Spaltenüberschriften erkennen.\n"
-            "Die Datei muss eine Mengen-Spalte enthalten (z.B. 'Menge', 'Stk.', 'Anzahl', 'Qty', 'Pcs')."
+            "Die Datei muss eine Mengen-Spalte enthalten (z.B. 'Quantity', 'Menge', 'Stk.', 'Anzahl', 'Qty', 'Pcs')."
         )
 
     items = []
@@ -182,7 +190,7 @@ def _parse_pdf(filepath):
     if not header_found:
         raise ValueError(
             "Konnte keine Tabelle mit Spaltenüberschriften im PDF finden.\n"
-            "Das PDF muss eine Tabelle mit Mengen-Spalte enthalten (z.B. 'Menge', 'Stk.', 'Anzahl', 'Qty', 'Pcs')."
+            "Das PDF muss eine Tabelle mit Mengen-Spalte enthalten (z.B. 'Quantity', 'Menge', 'Stk.', 'Anzahl', 'Qty', 'Pcs')."
         )
     if not items:
         raise ValueError("Das PDF enthält keine gültigen Positionen mit Menge > 0.")

@@ -61,6 +61,12 @@ class InvoiceGenerator:
 
         self.page_num = 0
         self._row_counter = 0
+        # Gesamtwerte einmalig berechnen (werden von _draw_summary und _draw_girocode genutzt)
+        ust_pct = self.inv.get("ust_percent", 0) if self.inv.get("ust_enabled", False) else 0
+        self._total_netto = sum(item["quantity"] * item["unit_price"] for item in self.items)
+        self._total_qty   = sum(item["quantity"] for item in self.items)
+        self._total_ust   = ust_pct
+        self._total_brutto = self._total_netto * (1 + ust_pct / 100)
         total_pages = self._estimate_total_pages()
 
         self._start_new_page()
@@ -298,12 +304,11 @@ class InvoiceGenerator:
         """Zeichnet die Zusammenfassung (Netto, USt., Brutto)."""
         c = self.c
 
-        # Gesamtbeträge berechnen
-        netto = sum(item["quantity"] * item["unit_price"] for item in self.items)
-        ust_percent = self.inv.get("ust_percent", 0) if self.inv.get("ust_enabled", False) else 0
-        ust_amount = netto * ust_percent / 100
-        brutto = netto + ust_amount
-        total_quantity = sum(item["quantity"] for item in self.items)
+        netto          = self._total_netto
+        ust_percent    = self._total_ust
+        ust_amount     = netto * ust_percent / 100
+        brutto         = self._total_brutto
+        total_quantity = self._total_qty
 
         y -= 4 * mm
         c.setFont("Arial", FONT_SIZE_NORMAL)
@@ -343,9 +348,7 @@ class InvoiceGenerator:
         try:
             from src.pdf.girocode import generate_epc_qr
 
-            netto = sum(item["quantity"] * item["unit_price"] for item in self.items)
-            ust_percent = self.inv.get("ust_percent", 0) if self.inv.get("ust_enabled", False) else 0
-            amount = netto * (1 + ust_percent / 100)
+            amount = self._total_brutto
 
             iban = FOOTER.get("iban", "AT532011182010592702")
             bic = FOOTER.get("bic", "GIBAATWWXXX")

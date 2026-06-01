@@ -20,6 +20,8 @@ try:
 except ImportError:
     HAS_DND = False
 
+_TABLE_DISPLAY_LIMIT = 500
+
 _BLUE      = "#1B6EC2"
 _BLUE_DK   = "#155599"
 _BLUE_DIS  = "#9BBFE0"
@@ -494,7 +496,7 @@ class RechnungsBot:
     def _populate_table(self):
         self.tree.delete(*self.tree.get_children())
         markup = self._get_markup_factor()
-        for i, item in enumerate(self.items):
+        for i, item in enumerate(self.items[:_TABLE_DISPLAY_LIMIT]):
             unit  = item["source_price"] * markup
             total = item["quantity"] * unit
             self.tree.insert("", tk.END, values=(
@@ -506,6 +508,8 @@ class RechnungsBot:
     def _update_total_label(self):
         markup = self._get_markup_factor()
         netto  = sum(it["quantity"] * it["source_price"] * markup for it in self.items)
+        n = len(self.items)
+        prefix = f"Zeige {_TABLE_DISPLAY_LIMIT} von {n}  ·  " if n > _TABLE_DISPLAY_LIMIT else ""
         if self.var_ust_enabled.get():
             try:
                 pct = float(self.var_ust_percent.get().replace(",", "."))
@@ -513,12 +517,12 @@ class RechnungsBot:
                 pct = 0
             ust = netto * pct / 100
             self.total_label.configure(
-                text=f"Netto: {netto:,.2f} €    USt. {pct:.0f}%: {ust:,.2f} €"
+                text=f"{prefix}Netto: {netto:,.2f} €    USt. {pct:.0f}%: {ust:,.2f} €"
                      f"    Brutto: {netto + ust:,.2f} €"
             )
         else:
             self.total_label.configure(
-                text=f"Gesamtsumme Netto: {netto:,.2f} €" if netto else "")
+                text=f"{prefix}Gesamtsumme Netto: {netto:,.2f} €" if (netto or prefix) else "")
 
     def _get_markup_factor(self):
         try:

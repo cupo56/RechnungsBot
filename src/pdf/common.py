@@ -48,9 +48,15 @@ def truncate_text(text, font_name, font_size, max_width):
     """Kürzt Text mit '…' wenn er breiter als max_width ist."""
     if pdfmetrics.stringWidth(text, font_name, font_size) <= max_width:
         return text
-    while len(text) > 3 and pdfmetrics.stringWidth(text + "...", font_name, font_size) > max_width:
-        text = text[:-1]
-    return text.rstrip() + "..."
+    # Binäre Suche: O(log n) statt O(n) stringWidth-Aufrufe
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if pdfmetrics.stringWidth(text[:mid] + "...", font_name, font_size) <= max_width:
+            lo = mid
+        else:
+            hi = mid - 1
+    return (text[:lo].rstrip() + "...") if lo > 0 else "..."
 
 
 def draw_bank_footer(c):
