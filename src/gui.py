@@ -10,6 +10,7 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 
 from src.config import load_config, save_config
 from src.excel.parser import parse_excel
+from src.pdf_input.parser import parse_pdf
 from src.pdf.invoice import generate_invoice
 from src.pdf.delivery_note import generate_delivery_note
 from src.compare.gui_tab import VergleichsTab
@@ -62,7 +63,7 @@ class RechnungsBot:
         self._hovering   = False
         self._drop_bg    = _DROP_BG
         self._drop_icon  = "📂"
-        self._drop_text  = "Excel-Datei hierher ziehen  oder  klicken zum Auswählen"
+        self._drop_text  = "Excel- oder PDF-Datei hierher ziehen  oder  klicken zum Auswählen"
         self._drop_color = _MUTED
 
         self._setup_styles()
@@ -115,7 +116,7 @@ class RechnungsBot:
         hdr.pack(fill=tk.X, pady=(0, 8))
         self.btn_reset = tk.Button(
             hdr,
-            text="↺  Neue Excel laden",
+            text="↺  Neue Datei laden",
             font=("Segoe UI", 9),
             bg="#F1F5F9", fg="#1E293B",
             activebackground="#E2E8F0", activeforeground="#1E293B",
@@ -191,8 +192,13 @@ class RechnungsBot:
 
     def _browse_file(self):
         path = filedialog.askopenfilename(
-            title="Excel-Datei auswählen",
-            filetypes=[("Excel-Dateien", "*.xlsx *.xls"), ("Alle Dateien", "*.*")],
+            title="Datei auswählen",
+            filetypes=[
+                ("Unterstützte Dateien", "*.xlsx *.xls *.pdf"),
+                ("Excel-Dateien", "*.xlsx *.xls"),
+                ("PDF-Dateien", "*.pdf"),
+                ("Alle Dateien", "*.*"),
+            ],
         )
         if path:
             self._load_file(path)
@@ -216,15 +222,17 @@ class RechnungsBot:
             # No braces: single path or space-separated multiple paths → take first
             path = raw.split()[0] if raw else ""
         path = path.strip()
-        if path.lower().endswith((".xlsx", ".xls")):
+        if path.lower().endswith((".xlsx", ".xls", ".pdf")):
             self._load_file(path)
         else:
-            self._set_status("Bitte eine Excel-Datei (.xlsx) laden.", error=True)
+            self._set_status("Bitte eine Excel- (.xlsx) oder PDF-Datei laden.", error=True)
 
     def _load_file(self, filepath):
         self._load_token += 1
         token = self._load_token
-        self._set_status("Excel wird eingelesen…")
+        is_pdf = filepath.lower().endswith(".pdf")
+        status_msg = "PDF wird eingelesen…" if is_pdf else "Excel wird eingelesen…"
+        self._set_status(status_msg)
         self._show_progress(True)
         self._drop_icon  = "⏳"
         self._drop_text  = "Datei wird geladen…"
@@ -234,7 +242,7 @@ class RechnungsBot:
 
         def _thread():
             try:
-                items = parse_excel(filepath)
+                items = parse_pdf(filepath) if is_pdf else parse_excel(filepath)
                 self.root.after(0, lambda: self._on_load_complete(filepath, items, token))
             except ValueError as e:
                 self.root.after(0, lambda: self._on_load_error(str(e), True, token))
@@ -264,7 +272,7 @@ class RechnungsBot:
         self.loaded_file = None
         self._load_token += 1
         self._drop_icon  = "📂"
-        self._drop_text  = "Excel-Datei hierher ziehen  oder  klicken zum Auswählen"
+        self._drop_text  = "Excel- oder PDF-Datei hierher ziehen  oder  klicken zum Auswählen"
         self._drop_color = _MUTED
         self._drop_bg    = _DROP_BG
         self._redraw_drop()
@@ -278,7 +286,7 @@ class RechnungsBot:
             return
         self._show_progress(False)
         self._drop_icon  = "📂"
-        self._drop_text  = "Excel-Datei hierher ziehen  oder  klicken zum Auswählen"
+        self._drop_text  = "Excel- oder PDF-Datei hierher ziehen  oder  klicken zum Auswählen"
         self._drop_color = _MUTED
         self._drop_bg    = _DROP_BG
         self._redraw_drop()
@@ -701,7 +709,7 @@ class RechnungsBot:
         self._load_token += 1  # laufender Thread ignoriert sein Ergebnis
         self._show_progress(False)
         self._drop_icon  = "📂"
-        self._drop_text  = "Excel-Datei hierher ziehen  oder  klicken zum Auswählen"
+        self._drop_text  = "Excel- oder PDF-Datei hierher ziehen  oder  klicken zum Auswählen"
         self._drop_color = _MUTED
         self._drop_bg    = _DROP_BG
         self._redraw_drop()
