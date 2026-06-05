@@ -3,6 +3,8 @@ RechnungsBot – Hauptprogramm mit GUI.
 """
 
 import os
+import sys
+import subprocess
 import datetime
 import threading
 import tkinter as tk
@@ -39,9 +41,16 @@ class RechnungsBot:
     """Hauptanwendung für die Rechnungserstellung."""
 
     def __init__(self):
+        self.root = None
+        global HAS_DND
         if HAS_DND:
-            self.root = TkinterDnD.Tk()
-        else:
+            try:
+                self.root = TkinterDnD.Tk()
+            except Exception as e:
+                print(f"Warnung: TkinterDnD konnte nicht geladen werden ({e}). Drag & Drop wird deaktiviert.")
+                HAS_DND = False
+                
+        if self.root is None:
             self.root = tk.Tk()
 
         self.root.title("RechnungsBot – Handelsagentur Adis Sefer")
@@ -78,8 +87,17 @@ class RechnungsBot:
         try:
             import sv_ttk
             sv_ttk.set_theme("light")
-        except ImportError:
-            pass
+            self.root.configure(bg="#fafafa")
+        except Exception as e:
+            print(f"Warnung: sv_ttk Theme konnte nicht geladen werden ({e}).")
+            # Auf macOS bleibt der native 'aqua'-Theme (handhabt Dark Mode korrekt).
+            # Auf anderen Plattformen 'clam' als soliden Fallback nutzen.
+            if sys.platform != "darwin":
+                try:
+                    ttk.Style().theme_use('clam')
+                except Exception:
+                    pass
+            self.root.configure(bg="white")
 
         s = ttk.Style()
         s.configure("Title.TLabel",   font=("Segoe UI", 18, "bold"))
@@ -245,9 +263,11 @@ class RechnungsBot:
                 items = parse_pdf(filepath) if is_pdf else parse_excel(filepath)
                 self.root.after(0, lambda: self._on_load_complete(filepath, items, token))
             except ValueError as e:
-                self.root.after(0, lambda: self._on_load_error(str(e), True, token))
+                msg = str(e)
+                self.root.after(0, lambda: self._on_load_error(msg, True, token))
             except Exception as e:
-                self.root.after(0, lambda: self._on_load_error(str(e), False, token))
+                msg = str(e)
+                self.root.after(0, lambda: self._on_load_error(msg, False, token))
 
         threading.Thread(target=_thread, daemon=True).start()
 
@@ -655,9 +675,17 @@ class RechnungsBot:
         self._save_current_config(increment_nr=True)
         self._set_status(msg)
         messagebox.showinfo("Erfolgreich erstellt", f"Erfolgreich erstellt:\n\n{msg}")
-        os.startfile(output_path)
+        self._open_file(output_path)
         if dlv_path:
-            os.startfile(dlv_path)
+            self._open_file(dlv_path)
+
+    def _open_file(self, filepath):
+        if sys.platform == "win32":
+            os.startfile(filepath)
+        elif sys.platform == "darwin":
+            subprocess.call(["open", filepath])
+        else:
+            subprocess.call(["xdg-open", filepath])
 
     def _on_pdf_error(self, error_msg):
         self._show_progress(False)

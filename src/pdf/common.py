@@ -3,6 +3,7 @@ Gemeinsame Konstanten und Hilfsfunktionen für PDF-Generatoren.
 """
 
 import os
+import platform
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
@@ -29,19 +30,45 @@ ROW_HEIGHT = 6.0 * mm
 _font_registered = False
 
 
+def _find_arial_paths():
+    """Gibt (normal_pfad, bold_pfad) zurück, oder (None, None) wenn nicht gefunden."""
+    system = platform.system()
+    if system == "Windows":
+        d = r"C:\Windows\Fonts"
+        return os.path.join(d, "arial.ttf"), os.path.join(d, "arialbd.ttf")
+    if system == "Darwin":
+        candidates = [
+            ("/System/Library/Fonts/Supplemental/Arial.ttf",      "/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
+            ("/Library/Fonts/Arial.ttf",                           "/Library/Fonts/Arial Bold.ttf"),
+            ("/Library/Fonts/Arial.ttf",                           "/Library/Fonts/Arial_Bold.ttf"),
+        ]
+        for normal, bold in candidates:
+            if os.path.exists(normal) and os.path.exists(bold):
+                return normal, bold
+    return None, None
+
+
 def register_fonts():
     """Registriert Arial-Schriftarten für PDF-Erzeugung (einmalig)."""
     global _font_registered
     if _font_registered:
         return
-    font_dir = r"C:\Windows\Fonts"
+    normal_path, bold_path = _find_arial_paths()
     try:
-        pdfmetrics.registerFont(TTFont("Arial",      os.path.join(font_dir, "arial.ttf")))
-        pdfmetrics.registerFont(TTFont("Arial-Bold", os.path.join(font_dir, "arialbd.ttf")))
-        _font_registered = True
+        if not (normal_path and os.path.exists(normal_path) and
+                bold_path  and os.path.exists(bold_path)):
+            raise FileNotFoundError("Arial TTF nicht gefunden")
+        pdfmetrics.registerFont(TTFont("Arial",      normal_path))
+        pdfmetrics.registerFont(TTFont("Arial-Bold", bold_path))
     except Exception:
-        pdfmetrics.registerFontFamily("Arial", normal="Helvetica", bold="Helvetica-Bold")
-        _font_registered = True
+        # Helvetica (eingebaut) unter den Namen "Arial"/"Arial-Bold" registrieren,
+        # damit alle setFont("Arial", …)-Aufrufe weiterhin funktionieren.
+        _fonts = pdfmetrics._fonts
+        if "Arial" not in _fonts:
+            _fonts["Arial"]      = pdfmetrics.getFont("Helvetica")
+        if "Arial-Bold" not in _fonts:
+            _fonts["Arial-Bold"] = pdfmetrics.getFont("Helvetica-Bold")
+    _font_registered = True
 
 
 def truncate_text(text, font_name, font_size, max_width):
