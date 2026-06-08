@@ -70,6 +70,18 @@ DEFAULTS = {
         "vat": "",
     },
     "customer_templates": {},
+    "last_provision_number": 1,
+    "last_provision_year": 2026,
+    "default_provision_ust_enabled": True,
+    "default_provision_ust_percent": 20.0,
+    "default_provision_girocode_enabled": True,
+    "last_provision_recipient": {
+        "name": "",
+        "street": "",
+        "plz_city": "",
+        "country": "",
+        "vat": "",
+    },
 }
 
 
@@ -90,9 +102,23 @@ def load_config():
 
 
 def save_config(config):
-    """Speichert Benutzereinstellungen in die JSON-Datei."""
+    """Speichert Benutzereinstellungen in die JSON-Datei.
+
+    Führt mit den bereits gespeicherten Werten zusammen, statt die Datei voll zu
+    überschreiben — so können verschiedene Programmteile (z.B. RechnungsBot-Tab
+    und Provisionsrechnung-Tab) jeweils nur ihre eigenen Schlüssel aktualisieren,
+    ohne die Einstellungen des jeweils anderen zu löschen.
+    """
+    merged = {}
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                merged = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            merged = {}
+    merged.update(config)
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2, ensure_ascii=False)
+            json.dump(merged, f, indent=2, ensure_ascii=False)
     except IOError as e:
         print(f"Warnung: Einstellungen konnten nicht gespeichert werden: {e}")

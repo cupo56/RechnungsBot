@@ -17,6 +17,7 @@ from src.pdf_input.parser import parse_pdf
 from src.pdf.invoice import generate_invoice
 from src.pdf.delivery_note import generate_delivery_note
 from src.compare.gui_tab import VergleichsTab
+from src.provision.gui_tab import ProvisionTab
 
 try:
     from tkinterdnd2 import TkinterDnD, DND_FILES
@@ -141,6 +142,10 @@ class RechnungsBot:
         tab_vergleich = ttk.Frame(self.notebook)
         self.notebook.add(tab_vergleich, text="  🔍  VergleichsBot  ")
         VergleichsTab(tab_vergleich)
+
+        tab_provision = ttk.Frame(self.notebook)
+        self.notebook.add(tab_provision, text="  💰  Provisionsrechnung  ")
+        ProvisionTab(tab_provision)
 
         main = ttk.Frame(self._tab_rechnung, padding=(16, 12, 16, 4))
         main.pack(fill=tk.BOTH, expand=True)
