@@ -817,37 +817,42 @@ class RechnungsBot:
         )
         self.btn_export_excel.pack(side=tk.LEFT, padx=(10, 0))
 
-    def _create_invoice(self):
+        self.btn_delivery_note_only = tk.Button(
+            btn_row,
+            text="   📦  Nur Lieferschein erstellen   ",
+            font=("Segoe UI", 10),
+            bg="#F1F5F9", fg="#1E293B",
+            activebackground="#E2E8F0", activeforeground="#1E293B",
+            relief="flat", bd=0,
+            padx=14, pady=11,
+            cursor="hand2",
+            command=self._create_delivery_note_only,
+        )
+        self.btn_delivery_note_only.pack(side=tk.LEFT, padx=(10, 0))
+
+    def _collect_invoice_data(self):
+        """Liest und validiert die GUI-Felder. Gibt (invoice_items, invoice_data,
+        customer_data) zurück oder None, wenn die Validierung fehlschlägt
+        (eine Warnmeldung wird dabei bereits angezeigt)."""
         if not self.items:
             messagebox.showwarning("Keine Daten", "Bitte zuerst eine Excel-Datei laden.")
-            return
+            return None
 
         invoice_nr = self.var_invoice_nr.get().strip()
         if not invoice_nr:
             messagebox.showwarning("Rechnungsnummer fehlt", "Bitte eine Rechnungsnummer eingeben.")
-            return
+            return None
 
         invoice_date = self.var_date.get().strip()
         if not invoice_date:
             messagebox.showwarning("Datum fehlt", "Bitte ein Rechnungsdatum eingeben.")
-            return
+            return None
 
         cust_name = self.var_cust_name.get().strip()
         if not cust_name:
             messagebox.showwarning("Kunde fehlt", "Bitte den Firmennamen des Kunden eingeben.")
-            return
+            return None
 
-        default_name = f"Rechnung_{invoice_nr.replace('/', '_')}.pdf"
-        output_path  = filedialog.asksaveasfilename(
-            title="Rechnung speichern als",
-            defaultextension=".pdf",
-            filetypes=[("PDF-Dateien", "*.pdf")],
-            initialfile=default_name,
-        )
-        if not output_path:
-            return
-
-        # Alle GUI-Daten vor dem Thread-Start auslesen
         markup        = self._get_markup_factor()
         invoice_items = []
         for it in self.items:
@@ -879,6 +884,24 @@ class RechnungsBot:
             "country":  self.var_cust_country.get().strip(),
             "vat":      self.var_cust_vat.get().strip(),
         }
+        return invoice_items, invoice_data, customer_data
+
+    def _create_invoice(self):
+        collected = self._collect_invoice_data()
+        if collected is None:
+            return
+        invoice_items, invoice_data, customer_data = collected
+        invoice_nr = invoice_data["number"]
+
+        default_name = f"Rechnung_{invoice_nr.replace('/', '_')}.pdf"
+        output_path  = filedialog.asksaveasfilename(
+            title="Rechnung speichern als",
+            defaultextension=".pdf",
+            filetypes=[("PDF-Dateien", "*.pdf")],
+            initialfile=default_name,
+        )
+        if not output_path:
+            return
 
         # Lieferschein-Pfad im Main-Thread bestimmen
         dlv_path = None
@@ -891,6 +914,7 @@ class RechnungsBot:
         self._set_status("Rechnung wird erstellt…")
         self._show_progress(True, show_cancel=False)
         self.btn_create.configure(state="disabled", bg=_BLUE_DIS, cursor="arrow")
+        self.btn_delivery_note_only.configure(state="disabled")
 
         def _thread():
             try:
@@ -907,6 +931,7 @@ class RechnungsBot:
     def _on_pdf_complete(self, output_path, dlv_path):
         self._show_progress(False)
         self.btn_create.configure(state="normal", bg=_BLUE, cursor="hand2")
+        self.btn_delivery_note_only.configure(state="normal")
         msg = f"Rechnung gespeichert: {os.path.basename(output_path)}"
         if dlv_path:
             msg += f" | Lieferschein: {os.path.basename(dlv_path)}"
@@ -916,6 +941,54 @@ class RechnungsBot:
         self._open_file(output_path)
         if dlv_path:
             self._open_file(dlv_path)
+
+    def _create_delivery_note_only(self):
+        collected = self._collect_invoice_data()
+        if collected is None:
+            return
+        invoice_items, invoice_data, customer_data = collected
+        invoice_nr = invoice_data["number"]
+
+        default_name = f"Lieferschein_{invoice_nr.replace('/', '_')}.pdf"
+        output_path  = filedialog.asksaveasfilename(
+            title="Lieferschein speichern als",
+            defaultextension=".pdf",
+            filetypes=[("PDF-Dateien", "*.pdf")],
+            initialfile=default_name,
+        )
+        if not output_path:
+            return
+
+        self._set_status("Lieferschein wird erstellt…")
+        self._show_progress(True, show_cancel=False)
+        self.btn_create.configure(state="disabled", bg=_BLUE_DIS, cursor="arrow")
+        self.btn_delivery_note_only.configure(state="disabled")
+
+        def _thread():
+            try:
+                generate_delivery_note(invoice_items, invoice_data, customer_data, output_path)
+                self.root.after(0, lambda: self._on_delivery_note_complete(output_path))
+            except Exception as e:
+                err = str(e)
+                self.root.after(0, lambda: self._on_delivery_note_error(err))
+
+        threading.Thread(target=_thread, daemon=True).start()
+
+    def _on_delivery_note_complete(self, output_path):
+        self._show_progress(False)
+        self.btn_create.configure(state="normal", bg=_BLUE, cursor="hand2")
+        self.btn_delivery_note_only.configure(state="normal")
+        msg = f"Lieferschein gespeichert: {os.path.basename(output_path)}"
+        self._set_status(msg)
+        messagebox.showinfo("Erfolgreich erstellt", f"Erfolgreich erstellt:\n\n{msg}")
+        self._open_file(output_path)
+
+    def _on_delivery_note_error(self, error_msg):
+        self._show_progress(False)
+        self.btn_create.configure(state="normal", bg=_BLUE, cursor="hand2")
+        self.btn_delivery_note_only.configure(state="normal")
+        messagebox.showerror("Fehler", f"Fehler bei der Lieferschein-Erstellung:\n\n{error_msg}")
+        self._set_status("Fehler bei der Erstellung.", error=True)
 
     def _open_file(self, filepath):
         if sys.platform == "win32":
@@ -928,6 +1001,7 @@ class RechnungsBot:
     def _on_pdf_error(self, error_msg):
         self._show_progress(False)
         self.btn_create.configure(state="normal", bg=_BLUE, cursor="hand2")
+        self.btn_delivery_note_only.configure(state="normal")
         messagebox.showerror("Fehler", f"Fehler bei der Rechnungserstellung:\n\n{error_msg}")
         self._set_status("Fehler bei der Erstellung.", error=True)
 

@@ -177,13 +177,7 @@ class DeliveryNoteGenerator:
             c.drawString(MARGIN_LEFT, y, f"VAT: {vat}")
             y -= 4 * mm
 
-        y -= 4 * mm
-
-        # --- EXPORT-Label ---
-        if not self.inv.get("ust_enabled", False):
-            c.setFont("Arial", 12)
-            c.drawCentredString(PAGE_W / 2, y, "EXPORT")
-        y -= 8 * mm
+        y -= 12 * mm
 
         # --- Lieferschein-Info & Datum ---
         c.setFont("Arial", FONT_SIZE_TITLE)
