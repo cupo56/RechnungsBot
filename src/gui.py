@@ -182,6 +182,17 @@ class RechnungsBot:
             parent, height=88, highlightthickness=0, cursor="hand2"
         )
         self.drop_canvas.pack(fill=tk.X)
+
+        # Persistente Canvas-Items erstellen (werden nie gelöscht, nur aktualisiert)
+        c = self.drop_canvas
+        self._drop_bg_id     = c.create_rectangle(0, 0, 1, 1, fill=self._drop_bg, outline="")
+        self._drop_border_id = c.create_rectangle(4, 4, 1, 1, fill="",
+                                                   outline=_DASH_CLR, width=2, dash=(9, 5))
+        self._drop_icon_id   = c.create_text(0, 0, text=self._drop_icon,
+                                              font=("Segoe UI", 20), fill=self._drop_color)
+        self._drop_text_id   = c.create_text(0, 0, text=self._drop_text,
+                                              font=("Segoe UI", 10), fill=self._drop_color)
+
         self.drop_canvas.bind("<Configure>", lambda e: self._redraw_drop())
         self.drop_canvas.bind("<Button-1>",  lambda e: self._browse_file())
         self.drop_canvas.bind("<Enter>",     lambda e: self._set_hover(True))
@@ -196,24 +207,19 @@ class RechnungsBot:
 
     def _redraw_drop(self):
         c = self.drop_canvas
-        c.delete("all")
         w, h = c.winfo_width(), c.winfo_height()
         if w < 20:
             return
-        # Hintergrund
-        c.create_rectangle(0, 0, w, h, fill=self._drop_bg, outline="")
-        # Gestrichelter Rahmen
+        # Positionen und Eigenschaften der bestehenden Items aktualisieren
+        c.coords(self._drop_bg_id, 0, 0, w, h)
+        c.itemconfig(self._drop_bg_id, fill=self._drop_bg)
         border = _BLUE if self._hovering else _DASH_CLR
-        c.create_rectangle(4, 4, w - 4, h - 4,
-                           fill="", outline=border, width=2, dash=(9, 5))
-        # Icon
-        c.create_text(w // 2, h // 2 - 14,
-                      text=self._drop_icon, font=("Segoe UI", 20),
-                      fill=self._drop_color)
-        # Text
-        c.create_text(w // 2, h // 2 + 16,
-                      text=self._drop_text, font=("Segoe UI", 10),
-                      fill=self._drop_color)
+        c.coords(self._drop_border_id, 4, 4, w - 4, h - 4)
+        c.itemconfig(self._drop_border_id, outline=border)
+        c.coords(self._drop_icon_id, w // 2, h // 2 - 14)
+        c.itemconfig(self._drop_icon_id, text=self._drop_icon, fill=self._drop_color)
+        c.coords(self._drop_text_id, w // 2, h // 2 + 16)
+        c.itemconfig(self._drop_text_id, text=self._drop_text, fill=self._drop_color)
 
     def _set_hover(self, on: bool):
         self._hovering = on

@@ -237,6 +237,17 @@ class _UploadZone:
 
         self.canvas = tk.Canvas(self.frame, height=82, highlightthickness=0, cursor="hand2")
         self.canvas.pack(fill=tk.X)
+
+        # Persistente Canvas-Items erstellen (werden nie gelöscht, nur aktualisiert)
+        c = self.canvas
+        self._bg_item     = c.create_rectangle(0, 0, 1, 1, fill=self._bg, outline="")
+        self._border_item = c.create_rectangle(4, 4, 1, 1, fill="",
+                                                outline=_DASH, width=2, dash=(9, 5))
+        self._icon_item   = c.create_text(0, 0, text=self._icon,
+                                           font=("Segoe UI", 18), fill=self._color)
+        self._text_item   = c.create_text(0, 0, text=self._text,
+                                           font=("Segoe UI", 9), fill=self._color)
+
         self.canvas.bind("<Configure>", lambda e: self._redraw())
         self.canvas.bind("<Button-1>",  lambda e: self._browse())
         self.canvas.bind("<Enter>",     lambda e: self._set_hover(True))
@@ -247,15 +258,19 @@ class _UploadZone:
 
     def _redraw(self):
         c = self.canvas
-        c.delete("all")
         w, h = c.winfo_width(), c.winfo_height()
         if w < 20:
             return
-        c.create_rectangle(0, 0, w, h, fill=self._bg, outline="")
+        # Positionen und Eigenschaften der bestehenden Items aktualisieren
+        c.coords(self._bg_item, 0, 0, w, h)
+        c.itemconfig(self._bg_item, fill=self._bg)
         border = _BLUE if self._hovering else _DASH
-        c.create_rectangle(4, 4, w - 4, h - 4, fill="", outline=border, width=2, dash=(9, 5))
-        c.create_text(w // 2, h // 2 - 13, text=self._icon, font=("Segoe UI", 18), fill=self._color)
-        c.create_text(w // 2, h // 2 + 14, text=self._text,  font=("Segoe UI", 9),  fill=self._color)
+        c.coords(self._border_item, 4, 4, w - 4, h - 4)
+        c.itemconfig(self._border_item, outline=border)
+        c.coords(self._icon_item, w // 2, h // 2 - 13)
+        c.itemconfig(self._icon_item, text=self._icon, fill=self._color)
+        c.coords(self._text_item, w // 2, h // 2 + 14)
+        c.itemconfig(self._text_item, text=self._text, fill=self._color)
 
     def _set_hover(self, on):
         self._hovering = on
