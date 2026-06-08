@@ -26,6 +26,15 @@ except ImportError:
 
 _TABLE_DISPLAY_LIMIT = 500
 
+# Spalten der Positionstabelle, die im Indiv.-Modus pro Zeile bearbeitbar sind:
+# Spalten-ID -> (Schlüssel im items-Dict für den Override-Wert, Werttyp)
+_EDITABLE_COLUMNS = {
+    "stk":         ("custom_quantity",   int),
+    "ean":         ("custom_ean",        str),
+    "produkt":     ("custom_product",    str),
+    "einzelpreis": ("custom_unit_price", float),
+}
+
 _BLUE      = "#1B6EC2"
 _BLUE_DK   = "#155599"
 _BLUE_DIS  = "#9BBFE0"
@@ -54,7 +63,7 @@ class RechnungsBot:
         if self.root is None:
             self.root = tk.Tk()
 
-        self.root.title("RechnungsBot – Handelsagentur Adis Sefer")
+        self.root.title("HandelsAgent – Handelsagentur Adis Sefer")
         self.root.geometry("980x920")
         self.root.minsize(860, 820)
 
@@ -68,6 +77,7 @@ class RechnungsBot:
         self.config = load_config()
         self._load_token = 0
         self._markup_debounce_id = None
+        self._cell_edit = None
 
         # Drop-Zone Zustand
         self._hovering   = False
@@ -277,6 +287,7 @@ class RechnungsBot:
             return
         self._show_progress(False)
         self.items = items
+        self.var_select_all_individual.set(False)
         self.loaded_file = filepath
         name = os.path.basename(filepath)
         self._drop_icon  = "✅"
@@ -290,6 +301,7 @@ class RechnungsBot:
 
     def _reset_session(self):
         self.items = []
+        self.var_select_all_individual.set(False)
         self.loaded_file = None
         self._load_token += 1
         self._drop_icon  = "📂"
@@ -491,52 +503,261 @@ class RechnungsBot:
     # ──────────────────────────────────────────────────────────────
 
     def _create_table_section(self, parent):
+        total_row = ttk.Frame(parent)
+        total_row.pack(side=tk.BOTTOM, fill=tk.X, pady=(0, 2))
+        self.total_label = ttk.Label(total_row, text="", style="Header.TLabel")
+        self.total_label.pack(side=tk.RIGHT, padx=4)
+
+        self.btn_add_row = ttk.Button(
+            total_row, text="➕ Neue Zeile hinzufügen", command=self._add_manual_row,
+        )
+        self.btn_add_row.pack(side=tk.LEFT, padx=4)
+
         frame = ttk.LabelFrame(parent, text="  Positionen  ", padding=(6, 6))
         frame.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
 
-        cols = ("stk", "ean", "produkt", "einzelpreis", "gesamtpreis")
+        self.var_select_all_individual = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            frame, text="Alle Positionen individuell bearbeiten",
+            variable=self.var_select_all_individual,
+            command=self._on_select_all_individual_toggled,
+        ).pack(anchor=tk.W)
+
+        ttk.Label(
+            frame,
+            text="„Indiv.“ ankreuzen, um Stk., EAN, Produktname und Einzelpreis dieser Position "
+                 "manuell zu bearbeiten (Klick auf die jeweilige Zelle). Mit 🗑 lässt sich "
+                 "eine Position entfernen.",
+            foreground=_MUTED, font=("Segoe UI", 8), wraplength=600, justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(0, 4))
+
+        cols = ("stk", "ean", "produkt", "indiv", "einzelpreis", "gesamtpreis", "delete")
         self.tree = ttk.Treeview(frame, columns=cols, show="headings",
                                  height=12, selectmode="browse")
 
-        self.tree.heading("stk",         text="Stk.",          anchor=tk.CENTER)
-        self.tree.heading("ean",         text="EAN",           anchor=tk.W)
-        self.tree.heading("produkt",     text="Produkt",       anchor=tk.W)
-        self.tree.heading("einzelpreis", text="Einzelpreis €", anchor=tk.E)
-        self.tree.heading("gesamtpreis", text="Gesamtpreis €", anchor=tk.E)
+        self.tree.heading("stk",         text="Stk.",           anchor=tk.CENTER)
+        self.tree.heading("ean",         text="EAN",            anchor=tk.W)
+        self.tree.heading("produkt",     text="Produkt",        anchor=tk.W)
+        self.tree.heading("indiv",       text="Indiv.",         anchor=tk.CENTER)
+        self.tree.heading("einzelpreis", text="Einzelpreis €",  anchor=tk.E)
+        self.tree.heading("gesamtpreis", text="Gesamtpreis €",  anchor=tk.E)
+        self.tree.heading("delete",      text="",               anchor=tk.CENTER)
 
         self.tree.column("stk",         width=50,  anchor=tk.CENTER, minwidth=40,  stretch=False)
-        self.tree.column("ean",         width=135, anchor=tk.W,      minwidth=100, stretch=False)
-        self.tree.column("produkt",     width=0,   anchor=tk.W,      minwidth=200)
-        self.tree.column("einzelpreis", width=115, anchor=tk.E,      minwidth=90,  stretch=False)
-        self.tree.column("gesamtpreis", width=125, anchor=tk.E,      minwidth=90,  stretch=False)
+        self.tree.column("ean",         width=120, anchor=tk.W,      minwidth=100, stretch=False)
+        self.tree.column("produkt",     width=0,   anchor=tk.W,      minwidth=160)
+        self.tree.column("indiv",       width=55,  anchor=tk.CENTER, minwidth=50,  stretch=False)
+        self.tree.column("einzelpreis", width=105, anchor=tk.E,      minwidth=90,  stretch=False)
+        self.tree.column("gesamtpreis", width=115, anchor=tk.E,      minwidth=90,  stretch=False)
+        self.tree.column("delete",      width=36,  anchor=tk.CENTER, minwidth=36,  stretch=False)
 
         self.tree.tag_configure("even", background=_ROW_EVEN)
+        self.tree.bind("<Button-1>", self._on_tree_click)
 
         sb = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=sb.set)
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
 
-        total_row = ttk.Frame(parent)
-        total_row.pack(fill=tk.X, pady=(0, 2))
-        self.total_label = ttk.Label(total_row, text="", style="Header.TLabel")
-        self.total_label.pack(side=tk.RIGHT, padx=4)
-
     def _populate_table(self):
+        self._cancel_cell_edit()
         self.tree.delete(*self.tree.get_children())
         markup = self._get_markup_factor()
         for i, item in enumerate(self.items[:_TABLE_DISPLAY_LIMIT]):
-            unit  = item["source_price"] * markup
-            total = item["quantity"] * unit
+            ean, qty, product, unit = self._effective_values(item, markup)
+            total = qty * unit
+            checkbox = "☑" if item.get("individual") else "☐"
             self.tree.insert("", tk.END, values=(
-                item["quantity"], item["ean"], item["product"],
-                f"{unit:.2f}", f"{total:.2f}",
+                qty, ean, product, checkbox,
+                f"{unit:.2f}", f"{total:.2f}", "🗑",
             ), tags=("even",) if i % 2 == 0 else ())
         self._update_total_label()
 
+    def _effective_values(self, item, markup):
+        if item.get("individual"):
+            ean     = item.get("custom_ean", item["ean"])
+            qty     = item.get("custom_quantity", item["quantity"])
+            product = item.get("custom_product", item["product"])
+            unit    = item.get("custom_unit_price")
+            if unit is None:
+                unit = item["source_price"] * markup
+            return ean, qty, product, unit
+        return item["ean"], item["quantity"], item["product"], item["source_price"] * markup
+
+    def _on_tree_click(self, event):
+        if self.tree.identify_region(event.x, event.y) != "cell":
+            return
+        # Offene Zelleneditierung zuerst übernehmen — das baut die Tabelle neu auf
+        # (neue Zeilen-IDs), daher muss row_id erst danach ermittelt werden.
+        self._commit_cell_edit()
+        row_id = self.tree.identify_row(event.y)
+        if not row_id:
+            return
+        col_id = self._column_id_at(event.x)
+        if col_id is None:
+            return
+        index = self.tree.index(row_id)
+        item  = self.items[index]
+
+        if col_id == "indiv":
+            self._toggle_individual(row_id)
+        elif col_id == "delete":
+            self._delete_item(row_id)
+        elif col_id in _EDITABLE_COLUMNS and item.get("individual"):
+            self._start_cell_edit(row_id, col_id)
+
+    def _column_id_at(self, x):
+        col = self.tree.identify_column(x)
+        try:
+            idx = int(col[1:]) - 1
+        except ValueError:
+            return None
+        cols = self.tree["columns"]
+        return cols[idx] if 0 <= idx < len(cols) else None
+
+    def _toggle_individual(self, row_id):
+        self._commit_cell_edit()
+        index = self.tree.index(row_id)
+        item  = self.items[index]
+        if item.get("manual"):
+            return  # manuell hinzugefügte Zeilen bleiben immer individuell editierbar
+        if item.get("individual"):
+            item["individual"] = False
+        else:
+            self._activate_individual(item, self._get_markup_factor())
+        self._populate_table()
+
+    def _add_manual_row(self):
+        """Fügt eine leere, manuell editierbare Position am Ende der Tabelle hinzu."""
+        self._commit_cell_edit()
+        item = {
+            "ean":               "",
+            "product":           "Neue Position",
+            "quantity":          1,
+            "source_price":      0.0,
+            "individual":        True,
+            "manual":            True,
+            "custom_quantity":   1,
+            "custom_ean":        "",
+            "custom_product":    "Neue Position",
+            "custom_unit_price": 0.0,
+        }
+        self.items.append(item)
+        self._populate_table()
+
+        children = self.tree.get_children()
+        if children:
+            row_id = children[-1]
+            self.tree.see(row_id)
+            self._start_cell_edit(row_id, "produkt")
+
+    def _activate_individual(self, item, markup):
+        item["individual"] = True
+        item.setdefault("custom_quantity", item["quantity"])
+        item.setdefault("custom_ean", item["ean"])
+        item.setdefault("custom_product", item["product"])
+        item.setdefault("custom_unit_price", round(item["source_price"] * markup, 2))
+
+    def _on_select_all_individual_toggled(self):
+        self._commit_cell_edit()
+        enable = self.var_select_all_individual.get()
+        markup = self._get_markup_factor()
+        for item in self.items:
+            if item.get("manual"):
+                continue  # manuell hinzugefügte Zeilen bleiben immer individuell editierbar
+            if enable:
+                self._activate_individual(item, markup)
+            else:
+                item["individual"] = False
+        self._populate_table()
+
+    def _delete_item(self, row_id):
+        self._commit_cell_edit()
+        index = self.tree.index(row_id)
+        item  = self.items[index]
+        name  = item.get("custom_product", item["product"])
+        if not messagebox.askyesno("Position entfernen",
+                                   f"Soll die Position „{name}“ wirklich entfernt werden?"):
+            return
+        del self.items[index]
+        self._populate_table()
+
+    def _start_cell_edit(self, row_id, col_id):
+        self._commit_cell_edit()
+        bbox = self.tree.bbox(row_id, col_id)
+        if not bbox:
+            return
+        x, y, width, height = bbox
+        index = self.tree.index(row_id)
+        field_key, value_type = _EDITABLE_COLUMNS[col_id]
+        current = self.items[index][field_key]
+
+        if value_type is float:
+            text, justify = f"{current:.2f}".replace(".", ","), tk.RIGHT
+        elif value_type is int:
+            text, justify = str(current), tk.CENTER
+        else:
+            text, justify = str(current), tk.LEFT
+
+        var   = tk.StringVar(value=text)
+        entry = ttk.Entry(self.tree, textvariable=var, justify=justify)
+        entry.place(x=x, y=y, width=width, height=height)
+        entry.focus_set()
+        entry.select_range(0, tk.END)
+
+        self._cell_edit = (index, field_key, value_type, entry, var)
+        entry.bind("<Return>",   lambda e: self._commit_cell_edit())
+        entry.bind("<KP_Enter>", lambda e: self._commit_cell_edit())
+        entry.bind("<Escape>",   lambda e: self._cancel_cell_edit())
+        entry.bind("<FocusOut>", lambda e: self._commit_cell_edit())
+
+    def _commit_cell_edit(self):
+        if not self._cell_edit:
+            return
+        index, field_key, value_type, entry, var = self._cell_edit
+        self._cell_edit = None
+        raw = var.get().strip()
+        entry.destroy()
+
+        if value_type is str:
+            if field_key == "custom_product" and not raw:
+                messagebox.showwarning("Ungültiger Wert", "Der Produktname darf nicht leer sein.")
+                return
+            self.items[index][field_key] = raw
+        elif value_type is int:
+            try:
+                value = int(float(raw.replace(",", ".")))
+            except ValueError:
+                messagebox.showwarning("Ungültiger Wert", f"'{raw}' ist keine gültige Stückzahl.")
+                return
+            if value <= 0:
+                messagebox.showwarning("Ungültiger Wert", "Die Stückzahl muss größer als 0 sein.")
+                return
+            self.items[index][field_key] = value
+        else:
+            try:
+                value = float(raw.replace(",", "."))
+            except ValueError:
+                messagebox.showwarning("Ungültiger Preis", f"'{raw}' ist kein gültiger Preis.")
+                return
+            if value < 0:
+                messagebox.showwarning("Ungültiger Preis", "Der Preis darf nicht negativ sein.")
+                return
+            self.items[index][field_key] = value
+
+        self._populate_table()
+
+    def _cancel_cell_edit(self):
+        if not self._cell_edit:
+            return
+        _, _, _, entry, _ = self._cell_edit
+        self._cell_edit = None
+        entry.destroy()
+
     def _update_total_label(self):
         markup = self._get_markup_factor()
-        netto  = sum(it["quantity"] * it["source_price"] * markup for it in self.items)
+        netto  = sum(qty * unit for _, qty, _, unit in
+                     (self._effective_values(it, markup) for it in self.items))
         n = len(self.items)
         prefix = f"Zeige {_TABLE_DISPLAY_LIMIT} von {n}  ·  " if n > _TABLE_DISPLAY_LIMIT else ""
         if self.var_ust_enabled.get():
@@ -628,11 +849,11 @@ class RechnungsBot:
 
         # Alle GUI-Daten vor dem Thread-Start auslesen
         markup        = self._get_markup_factor()
-        invoice_items = [
-            {"ean": it["ean"], "product": it["product"],
-             "quantity": it["quantity"], "unit_price": it["source_price"] * markup}
-            for it in self.items
-        ]
+        invoice_items = []
+        for it in self.items:
+            ean, qty, product, unit = self._effective_values(it, markup)
+            invoice_items.append({"ean": ean, "product": product,
+                                  "quantity": qty, "unit_price": unit})
 
         ust_enabled = self.var_ust_enabled.get()
         try:
@@ -727,10 +948,32 @@ class RechnungsBot:
             return
 
         markup = self._get_markup_factor()
-        rows = [
-            (it["quantity"], it["ean"], it["product"], it["source_price"] * markup)
-            for it in self.items
-        ]
+        invoice_items = []
+        for it in self.items:
+            ean, qty, product, unit = self._effective_values(it, markup)
+            invoice_items.append({"ean": ean, "product": product,
+                                  "quantity": qty, "unit_price": unit})
+
+        ust_enabled = self.var_ust_enabled.get()
+        try:
+            ust_percent = float(self.var_ust_percent.get().replace(",", ".")) if ust_enabled else 0
+        except ValueError:
+            ust_percent = 0
+
+        invoice_data = {
+            "number":      invoice_nr,
+            "date":        self.var_date.get().strip(),
+            "ust_enabled": ust_enabled,
+            "ust_percent": ust_percent,
+            "is_export":   self.var_is_export.get(),
+        }
+        customer_data = {
+            "name":     self.var_cust_name.get().strip(),
+            "street":   self.var_cust_street.get().strip(),
+            "plz_city": self.var_cust_plz.get().strip(),
+            "country":  self.var_cust_country.get().strip(),
+            "vat":      self.var_cust_vat.get().strip(),
+        }
 
         self._set_status("Excel-Datei wird erstellt…")
         self._show_progress(True, show_cancel=False)
@@ -738,7 +981,7 @@ class RechnungsBot:
 
         def _thread():
             try:
-                export_items_to_excel(rows, output_path)
+                export_items_to_excel(invoice_items, invoice_data, customer_data, output_path)
                 self.root.after(0, lambda: self._on_excel_complete(output_path))
             except Exception as e:
                 err = str(e)

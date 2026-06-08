@@ -21,7 +21,7 @@ MARGIN_BOTTOM = 20 * mm
 
 # Schriftgrößen
 FONT_SIZE_NORMAL = 9
-FONT_SIZE_SMALL  = 6
+FONT_SIZE_SMALL  = 7
 FONT_SIZE_HEADER = 10
 FONT_SIZE_TITLE  = 11
 
@@ -115,3 +115,5 @@ def draw_bank_footer(c):
         c.drawString(start_x + atu_w, y, text_rest)
     else:
         c.drawRightString(MARGIN_RIGHT, y, footer3)
+
+    return y

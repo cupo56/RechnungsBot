@@ -78,18 +78,18 @@ def parse_excel(filepath):
         rows_to_skip += 1
         cells_lower = [str(c).lower().strip() if c else "" for c in row]
 
-        if any("ean" in c for c in cells_lower) and any("order" in c for c in cells_lower):
+        if any("ean" in c for c in cells_lower) and any("order" in c or "quantity" in c or "bestellung" in c for c in cells_lower):
             header_found = True
             for col_idx, cell_val in enumerate(cells_lower):
                 if "ean" in cell_val and col_ean is None:
                     col_ean = col_idx
-                elif ("product" in cell_val or "produkt" in cell_val or "beschreibung" in cell_val):
+                elif ("product" in cell_val or "produkt" in cell_val or "beschreibung" in cell_val or "description" in cell_val):
                     if col_product is None:
                         col_product = col_idx
                 elif ("price" in cell_val or "preis" in cell_val) and "bulk" not in cell_val and "120" not in cell_val:
                     if col_price is None:
                         col_price = col_idx
-                elif "order" in cell_val or "bestellung" in cell_val:
+                elif "order" in cell_val or "bestellung" in cell_val or "quantity" in cell_val:
                     if col_order is None:
                         col_order = col_idx
             break

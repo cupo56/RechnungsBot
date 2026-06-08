@@ -28,10 +28,14 @@ COL_UST_C   = MARGIN_RIGHT - 6 * mm
 COL_SUMMARY_L = 110 * mm
 
 
+def _format_amount(val):
+    """Formatiert nur die Zahl eines Betrags, z.B. '7 411,07'."""
+    return f"{val:,.2f}".replace(",", " ").replace(".", ",")
+
+
 def _format_currency(val):
     """Formatiert einen Betrag als Währung z.B. '€ 7 411,07'."""
-    s = f"{val:,.2f}".replace(",", " ").replace(".", ",")
-    return f"€ {s}"
+    return f"€ {_format_amount(val)}"
 
 
 class InvoiceGenerator:
@@ -67,6 +71,18 @@ class InvoiceGenerator:
         self._total_qty   = sum(item["quantity"] for item in self.items)
         self._total_ust   = ust_pct
         self._total_brutto = self._total_netto * (1 + ust_pct / 100)
+
+        # Linksbündige Ausrichtung der Beträge in Einzelpreis-/Gesamtpreis-Spalte:
+        # Das €-Zeichen steht in jeder Zeile an derselben X-Position (untereinander
+        # ausgerichtet), die Zahl folgt linksbündig danach. Die X-Position wird so
+        # gewählt, dass der breiteste Betrag noch am rechten Spaltenrand endet.
+        euro_gap = pdfmetrics.stringWidth("€ ", "Arial", FONT_SIZE_SMALL)
+        max_ep_w = max((pdfmetrics.stringWidth(_format_amount(item["unit_price"]), "Arial", FONT_SIZE_SMALL)
+                        for item in self.items), default=0)
+        max_gp_w = max((pdfmetrics.stringWidth(_format_amount(item["quantity"] * item["unit_price"]), "Arial", FONT_SIZE_SMALL)
+                        for item in self.items), default=0)
+        self._ep_euro_x = COL_EP_R - euro_gap - max_ep_w
+        self._gp_euro_x = COL_GP_R - euro_gap - max_gp_w
         total_pages = self._estimate_total_pages()
 
         self._start_new_page()
@@ -211,7 +227,9 @@ class InvoiceGenerator:
             c.drawCentredString(PAGE_W / 2, y, "EXPORT")
         y -= 6 * mm
 
-        draw_bank_footer(self.c)
+        footer_y = draw_bank_footer(self.c)
+        if self.inv.get("girocode_enabled", True):
+            self._draw_girocode_in_footer(footer_y)
 
         return y
 
@@ -292,13 +310,21 @@ class InvoiceGenerator:
         product_text = truncate_text(item["product"], "Arial", FONT_SIZE_SMALL, max_product_width)
         c.drawString(COL_PRODUCT, y, product_text)
 
-        c.drawRightString(COL_EP_R, y, _format_currency(unit_price))
-        c.drawRightString(COL_GP_R, y, _format_currency(total_price))
+        self._draw_amount_left(self._ep_euro_x, y, unit_price)
+        self._draw_amount_left(self._gp_euro_x, y, total_price)
         if self.inv.get("ust_enabled", False):
             c.drawCentredString(COL_UST_C, y, f"{int(ust_val)}%")
 
         y -= ROW_HEIGHT
         return y
+
+    def _draw_amount_left(self, euro_x, y, val):
+        """Zeichnet einen Betrag linksbündig: '€' an fester X-Position (über alle
+        Zeilen ausgerichtet), die Zahl folgt direkt linksbündig danach."""
+        c = self.c
+        c.drawString(euro_x, y, "€")
+        amount_x = euro_x + pdfmetrics.stringWidth("€ ", "Arial", FONT_SIZE_SMALL)
+        c.drawString(amount_x, y, _format_amount(val))
 
     def _draw_summary(self, y):
         """Zeichnet die Zusammenfassung (Netto, USt., Brutto)."""
@@ -343,8 +369,9 @@ class InvoiceGenerator:
 
         return y
 
-    def _draw_girocode(self, x, y_top, size):
-        """Zeichnet den GiroCode QR-Code an der angegebenen Position."""
+    def _draw_girocode_in_footer(self, footer_y):
+        """Platziert den GiroCode verkleinert mittig zwischen Bankdaten und Firmen-/Steuerdaten
+        in der Fußzeile (auf Höhe von draw_bank_footer)."""
         try:
             from src.pdf.girocode import generate_epc_qr
 
@@ -357,13 +384,26 @@ class InvoiceGenerator:
             buf = generate_epc_qr(iban, bic, COMPANY["name"], amount, reference)
             qr_img = ImageReader(buf)
 
-            qr_y = y_top - size  # y_top = Oberkante → qr_y = Unterkante (ReportLab-Koordinaten)
-            self.c.drawImage(qr_img, x, qr_y, size, size)
+            # Lücke zwischen rechtem Rand der Bankdaten (links) und linkem Rand
+            # der Firmen-/Steuerdaten (rechts) ermitteln, QR-Code dort zentrieren
+            left_w = max(
+                pdfmetrics.stringWidth(FOOTER["bank_1"], "Arial", FONT_SIZE_NORMAL),
+                pdfmetrics.stringWidth(FOOTER["bank_2"], "Arial", FONT_SIZE_NORMAL),
+                pdfmetrics.stringWidth(FOOTER["bank_3"], "Arial", FONT_SIZE_NORMAL),
+            )
+            right_w = max(
+                pdfmetrics.stringWidth(FOOTER["footer_right_1"], "Arial-Bold", FONT_SIZE_TITLE),
+                pdfmetrics.stringWidth(FOOTER["footer_right_2"], "Arial", FONT_SIZE_NORMAL),
+                pdfmetrics.stringWidth(FOOTER["footer_right_3"], "Arial", FONT_SIZE_NORMAL),
+            )
+            gap_left  = MARGIN_LEFT + left_w
+            gap_right = MARGIN_RIGHT - right_w
+            center_x  = (gap_left + gap_right) / 2
 
-            self.c.setFont("Arial", FONT_SIZE_SMALL)
-            self.c.setFillColorRGB(0.4, 0.4, 0.4)
-            self.c.drawCentredString(x + size / 2, qr_y - 3 * mm, "SEPA-Überweisung via Banking-App")
-            self.c.setFillColorRGB(0, 0, 0)
+            size = 16 * mm
+            qr_x = center_x - size / 2
+            qr_y = (footer_y + 4 * mm) - size / 2  # vertikal mittig zur 3-zeiligen Fußzeile
+            self.c.drawImage(qr_img, qr_x, qr_y, size, size)
         except Exception as e:
             print(f"[RechnungsBot] GiroCode konnte nicht erzeugt werden: {e}")
 
@@ -384,11 +424,6 @@ class InvoiceGenerator:
             y -= 5 * mm
             c.drawString(COL_EAN, y, FOOTER.get("eu_text_3", "Beim Zahlungsverzug sind sämtliche Mahn.-und Inkassospesen zu ersetzen.Gerichtsstand ist Wien."))
             y -= 8 * mm
-
-        # QR-Code unterhalb des Footer-Texts, links ausgerichtet
-        if self.inv.get("girocode_enabled", True):
-            qr_size = 35 * mm
-            self._draw_girocode(MARGIN_LEFT + 5 * mm, y - 5 * mm, qr_size)
 
         return y
 

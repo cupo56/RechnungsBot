@@ -1,7 +1,8 @@
 """
 PDF-Parser für RechnungsBot.
 Liest Lieferanten-PDFs ein und extrahiert bestellte Positionen.
-Unterstützt CIPO-Format (Daten in Tabellenzellen) und MATIVA-Format (Daten im Fließtext).
+Unterstützt CIPO-Format (Daten in Tabellenzellen), MATIVA-Format und
+FCT-Format (Daten im Fließtext).
 Gibt die gleiche Dict-Struktur wie parse_excel() zurück.
 """
 
@@ -29,6 +30,16 @@ _RE_MATIVA_LINE2 = re.compile(
 
 # MATIVA-Format CT-Zeile: "CT: 33079000" (Zolltarifnummer, wird übersprungen)
 _RE_CT_LINE = re.compile(r'^CT:\s*\d+\s*$')
+
+# FCT-Format ("Purchase Order Confirmation" von F.C.T. B.V.) Artikelzeile:
+# "DKNY 24/7 Edp Spray 50 ml UG 48 12,80 614,40"
+# Gruppen: Beschreibung, Menge, Einzelpreis (Gesamtpreis wird verworfen)
+_RE_FCT_LINE = re.compile(
+    r'^(.+?)\s+[A-Z]{1,4}\s+(\d+)\s+([\d.,]+)\s+[\d.,]+\s*$'
+)
+
+# FCT-Format EAN-Zeile (eigene Zeile nach der Artikelzeile, ggf. nach Umbruchzeilen)
+_RE_FCT_EAN = re.compile(r'^\d{12,14}$')
 
 # Keywords zur Erkennung der Produkt-Tabellen-Kopfzeile (CIPO)
 _HEADER_KEYWORDS = ("unit price", "quantity", "mennyiség", "egységár")
@@ -148,10 +159,65 @@ def _parse_mativa(filepath: str) -> list[dict]:
     return items
 
 
+def _parse_fct(filepath: str) -> list[dict]:
+    """FCT-Format: Produktdaten befinden sich im Fließtext, EAN folgt in eigener Zeile.
+
+    Beispiel:
+        DKNY 24/7 Edp Spray 50 ml UG 48 12,80 614,40
+        085715950451
+
+    Mehrzeilige Produktnamen werden über Fortsetzungszeilen bis zur EAN-Zeile gesammelt:
+        Narciso Rodriguez Musc Noir Rose For Her Edp 100 ml UG 100 47,13 4.713,00
+        Spray
+        3423222055547
+    """
+    all_lines: list[str] = []
+    with pdfplumber.open(filepath) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if text:
+                all_lines.extend(text.split("\n"))
+
+    items = []
+    i = 0
+    while i < len(all_lines):
+        m = _RE_FCT_LINE.match(all_lines[i].strip())
+        if not m:
+            i += 1
+            continue
+
+        desc_parts = [m.group(1).strip()]
+        qty        = int(m.group(2))
+        unit_price = _cell_float(m.group(3))
+        i += 1
+
+        ean = ""
+        while i < len(all_lines):
+            cont = all_lines[i].strip()
+            if _RE_FCT_EAN.match(cont):
+                ean = cont
+                i += 1
+                break
+            if not cont or _RE_FCT_LINE.match(cont):
+                break
+            desc_parts.append(cont)
+            i += 1
+
+        items.append({
+            "ean":          ean,
+            "product":      _clean(" ".join(desc_parts)),
+            "quantity":     qty,
+            "source_price": unit_price,
+        })
+
+    return items
+
+
 def parse_pdf(filepath: str) -> list[dict]:
     """
     Liest eine Lieferanten-PDF-Datei und gibt bestellte Positionen zurück.
-    Versucht zuerst das CIPO-Format (Tabellenzellen), dann das MATIVA-Format (Fließtext).
+    Versucht zuerst das CIPO-Format (Tabellenzellen), dann das MATIVA-Format
+    und das FCT-Format (jeweils Fließtext).
 
     Returns:
         list[dict]: Liste von Positionen mit Schlüsseln:
@@ -164,6 +230,9 @@ def parse_pdf(filepath: str) -> list[dict]:
 
     if not items:
         items = _parse_mativa(filepath)
+
+    if not items:
+        items = _parse_fct(filepath)
 
     if not items:
         raise ValueError(

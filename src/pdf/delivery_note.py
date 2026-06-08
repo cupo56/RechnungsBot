@@ -298,8 +298,6 @@ class DeliveryNoteGenerator:
                     c.drawString(MARGIN_LEFT, y, line.strip())
                     y -= 6 * mm
         else:
-            c.drawString(MARGIN_LEFT, y, f"Auf Pallete mit Rechnung {self.inv.get('number', '')}")
-            y -= 6 * mm
             weight = self.inv.get("weight", "")
             if weight:
                 c.drawString(MARGIN_LEFT, y, f"Gewicht Netto {weight}kg")
