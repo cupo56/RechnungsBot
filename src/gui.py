@@ -95,22 +95,27 @@ class RechnungsBot:
     # ──────────────────────────────────────────────────────────────
 
     def _setup_styles(self):
-        try:
-            import sv_ttk
-            sv_ttk.set_theme("light")
+        s = ttk.Style()
+        if sys.platform == "win32":
+            # 'vista': natives, vom Betriebssystem gerendertes Windows-Theme.
+            # sv_ttk zeichnet jedes Widget aus PNG-Grafiken zusammen, was Tk beim
+            # Compositing so stark ausbremst, dass das Fenster beim Verschieben
+            # und Skalieren spürbar hinter dem Mauszeiger zurückbleibt.
+            try:
+                s.theme_use("vista")
+            except tk.TclError:
+                s.theme_use("clam")
             self.root.configure(bg="#fafafa")
-        except Exception as e:
-            print(f"Warnung: sv_ttk Theme konnte nicht geladen werden ({e}).")
-            # Auf macOS bleibt der native 'aqua'-Theme (handhabt Dark Mode korrekt).
-            # Auf anderen Plattformen 'clam' als soliden Fallback nutzen.
-            if sys.platform != "darwin":
-                try:
-                    ttk.Style().theme_use('clam')
-                except Exception:
-                    pass
+        elif sys.platform == "darwin":
+            # Natives 'aqua'-Theme behandelt Dark Mode korrekt.
+            self.root.configure(bg="white")
+        else:
+            try:
+                s.theme_use("clam")
+            except tk.TclError:
+                pass
             self.root.configure(bg="white")
 
-        s = ttk.Style()
         s.configure("Title.TLabel",   font=("Segoe UI", 18, "bold"))
         s.configure("Sub.TLabel",     font=("Segoe UI", 10), foreground=_MUTED)
         s.configure("Header.TLabel",  font=("Segoe UI", 10, "bold"))

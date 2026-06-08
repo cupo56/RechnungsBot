@@ -30,7 +30,7 @@ The app has five layers:
 
 **Entry point**: `main.py` creates an instance of `RechnungsBot` (from `src/gui.py`) and calls `.run()`.
 
-**GUI** (`src/gui.py`): Single `RechnungsBot` class built with Tkinter + sv-ttk theme. Handles drag-and-drop Excel loading (via `tkinterdnd2`), settings persistence, customer template management, and the invoice generation workflow. Both Excel loading and PDF generation run in background threads to keep the UI responsive.
+**GUI** (`src/gui.py`): Single `RechnungsBot` class built with Tkinter + ttk (native `vista` theme on Windows — see "Theme Choice" below). Handles drag-and-drop Excel loading (via `tkinterdnd2`), settings persistence, customer template management, and the invoice generation workflow. Both Excel loading and PDF generation run in background threads to keep the UI responsive.
 
 **Excel parsing** (`src/excel/parser.py`): `parse_excel(filepath)` auto-detects column headers (EAN, product, price, order quantity) from any superfeed-format Excel file. `shorten_product_name()` applies domain-specific abbreviation logic for perfume product names (removes gender suffixes, converts French fragrance terms like "Eau de Parfum" → "EdP"). All regex patterns are pre-compiled as module-level constants (`_RE_GENDER`, `_RE_COVER`, `_RE_WHITESPACE`, `_FRAGRANCE_REPLACEMENTS`) for performance.
 
@@ -59,6 +59,7 @@ Row 0: Rechnungsnr. · Row 1: Datum · Row 2: Aufschlag % · Row 3: USt. (with %
 
 ## Key Implementation Details
 
+- **Theme choice**: `_setup_styles()` uses ttk's native `vista` theme on Windows (OS-rendered, no image compositing). The project previously used `sv_ttk` ("Sun Valley"), but that theme draws every widget from PNG images — Tk's PNG compositing is slow enough that the window visibly lagged behind the cursor by seconds when dragging or resizing. Don't reintroduce `sv_ttk` (or other PNG/image-based ttk themes) without verifying window drag/resize stays smooth on real Windows hardware.
 - **Fonts**: Arial is loaded from `C:\Windows\Fonts` (Windows-specific hardcoded path). Falls back to Helvetica if not found. PDF generation will degrade visually on non-Windows systems.
 - **Currency formatting**: German locale throughout — dots as thousands separators, commas as decimal points (e.g., `€ 1 234,56`).
 - **Markup & VAT**: Markup % is applied to source prices from Excel. VAT (default 20% Austrian rate) is optional and toggled per invoice. The summary section always shows the netto/USt/brutto breakdown when VAT is enabled.
@@ -106,7 +107,7 @@ Loading runs in a background thread. A `_load_token` (int) guards against race c
 
 - PyInstaller spec: `RechnungsBot.spec` — single-file exe, no console window, UPX compression enabled.
 - `tkinterdnd2` DLLs are bundled via `datas` in the spec (auto-detected from the installed package path).
-- Hidden imports: `sv_ttk`, `tkinterdnd2`, `qrcode`, `qrcode.image.pil`, `PIL`, `PIL.Image`, `PIL.PngImagePlugin`.
+- Hidden imports: `tkinterdnd2`, `qrcode`, `qrcode.image.pil`, `PIL`, `PIL.Image`, `PIL.PngImagePlugin`.
 - `qrcode[pil]` must be installed in the venv before building, otherwise the QR module is missing from the exe.
 - Output: `dist\RechnungsBot.exe` (~22 MB). No installer needed — copy the exe next to `rechnungsbot_config.json`.
 - Always delete `build\` and `dist\` before rebuilding to avoid stale cache issues.
