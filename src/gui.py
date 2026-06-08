@@ -12,6 +12,7 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 
 from src.config import load_config, save_config
 from src.excel.parser import parse_excel
+from src.excel.exporter import export_items_to_excel
 from src.pdf_input.parser import parse_pdf
 from src.pdf.invoice import generate_invoice
 from src.pdf.delivery_note import generate_delivery_note
@@ -566,8 +567,11 @@ class RechnungsBot:
         frame = ttk.Frame(parent)
         frame.pack(fill=tk.X, pady=(4, 0), side=tk.BOTTOM)
 
+        btn_row = ttk.Frame(frame)
+        btn_row.pack(pady=6)
+
         self.btn_create = tk.Button(
-            frame,
+            btn_row,
             text="   📄  Rechnung erstellen   ",
             font=("Segoe UI", 12, "bold"),
             bg=_BLUE, fg="#FFFFFF",
@@ -577,7 +581,20 @@ class RechnungsBot:
             cursor="hand2",
             command=self._create_invoice,
         )
-        self.btn_create.pack(pady=6)
+        self.btn_create.pack(side=tk.LEFT)
+
+        self.btn_export_excel = tk.Button(
+            btn_row,
+            text="   📊  Als Excel exportieren   ",
+            font=("Segoe UI", 10),
+            bg="#F1F5F9", fg="#1E293B",
+            activebackground="#E2E8F0", activeforeground="#1E293B",
+            relief="flat", bd=0,
+            padx=14, pady=11,
+            cursor="hand2",
+            command=self._export_excel,
+        )
+        self.btn_export_excel.pack(side=tk.LEFT, padx=(10, 0))
 
     def _create_invoice(self):
         if not self.items:
@@ -692,6 +709,55 @@ class RechnungsBot:
         self.btn_create.configure(state="normal", bg=_BLUE, cursor="hand2")
         messagebox.showerror("Fehler", f"Fehler bei der Rechnungserstellung:\n\n{error_msg}")
         self._set_status("Fehler bei der Erstellung.", error=True)
+
+    def _export_excel(self):
+        if not self.items:
+            messagebox.showwarning("Keine Daten", "Bitte zuerst eine Excel-Datei laden.")
+            return
+
+        invoice_nr   = self.var_invoice_nr.get().strip()
+        default_name = f"Rechnung_{invoice_nr.replace('/', '_')}.xlsx" if invoice_nr else "Rechnung.xlsx"
+        output_path  = filedialog.asksaveasfilename(
+            title="Positionen als Excel exportieren",
+            defaultextension=".xlsx",
+            filetypes=[("Excel-Dateien", "*.xlsx")],
+            initialfile=default_name,
+        )
+        if not output_path:
+            return
+
+        markup = self._get_markup_factor()
+        rows = [
+            (it["quantity"], it["ean"], it["product"], it["source_price"] * markup)
+            for it in self.items
+        ]
+
+        self._set_status("Excel-Datei wird erstellt…")
+        self._show_progress(True, show_cancel=False)
+        self.btn_export_excel.configure(state="disabled", cursor="arrow")
+
+        def _thread():
+            try:
+                export_items_to_excel(rows, output_path)
+                self.root.after(0, lambda: self._on_excel_complete(output_path))
+            except Exception as e:
+                err = str(e)
+                self.root.after(0, lambda: self._on_excel_error(err))
+
+        threading.Thread(target=_thread, daemon=True).start()
+
+    def _on_excel_complete(self, output_path):
+        self._show_progress(False)
+        self.btn_export_excel.configure(state="normal", cursor="hand2")
+        msg = f"Excel-Datei gespeichert: {os.path.basename(output_path)}"
+        self._set_status(msg)
+        self._open_file(output_path)
+
+    def _on_excel_error(self, error_msg):
+        self._show_progress(False)
+        self.btn_export_excel.configure(state="normal", cursor="hand2")
+        messagebox.showerror("Fehler", f"Fehler beim Excel-Export:\n\n{error_msg}")
+        self._set_status("Fehler beim Excel-Export.", error=True)
 
     # ──────────────────────────────────────────────────────────────
     # Statusleiste
