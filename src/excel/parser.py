@@ -78,7 +78,7 @@ def parse_excel(filepath):
         rows_to_skip += 1
         cells_lower = [str(c).lower().strip() if c else "" for c in row]
 
-        if any("ean" in c for c in cells_lower) and any("order" in c or "quantity" in c or "bestellung" in c for c in cells_lower):
+        if any("order" in c or "quantity" in c or "bestellung" in c for c in cells_lower):
             header_found = True
             for col_idx, cell_val in enumerate(cells_lower):
                 if "ean" in cell_val and col_ean is None:
@@ -98,19 +98,13 @@ def parse_excel(filepath):
         wb.close()
         raise ValueError(
             "Konnte die Spaltenüberschriften nicht erkennen.\n"
-            "Die Excel-Datei muss Spalten mit 'EAN' und 'Order' enthalten."
+            "Die Excel-Datei muss mindestens eine Spalte mit 'Order' enthalten."
         )
 
-    if not all(x is not None for x in [col_ean, col_product, col_price, col_order]):
-        missing = []
-        if col_ean is None:
-            missing.append("EAN")
-        if col_product is None:
-            missing.append("Product/Produkt")
-        if col_price is None:
-            missing.append("Price/Preis")
-        if col_order is None:
-            missing.append("Order/Bestellung")
+    # EAN ist optional – nur Product, Price und Order sind Pflicht
+    required = {"Product/Produkt": col_product, "Price/Preis": col_price, "Order/Bestellung": col_order}
+    missing = [name for name, idx in required.items() if idx is None]
+    if missing:
         wb.close()
         raise ValueError(f"Fehlende Spalten: {', '.join(missing)}")
 
@@ -132,17 +126,17 @@ def parse_excel(filepath):
         if order_qty <= 0:
             continue
 
-        if col_ean >= ncols:
-            continue
-        ean_raw = row[col_ean]
-        if ean_raw is None:
-            continue
-
-        # EAN als String formatieren (ohne Dezimalstellen)
-        if isinstance(ean_raw, float):
-            ean_str = str(int(ean_raw))
+        # EAN als String formatieren (ohne Dezimalstellen) – leer wenn Spalte fehlt
+        if col_ean is not None and col_ean < ncols:
+            ean_raw = row[col_ean]
+            if ean_raw is None:
+                ean_str = ""
+            elif isinstance(ean_raw, float):
+                ean_str = str(int(ean_raw))
+            else:
+                ean_str = str(ean_raw).strip()
         else:
-            ean_str = str(ean_raw).strip()
+            ean_str = ""
 
         product_raw = row[col_product] if col_product < ncols else ""
         price_raw = row[col_price] if col_price < ncols else 0
