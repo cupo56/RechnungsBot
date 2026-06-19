@@ -414,7 +414,13 @@ class InvoiceGenerator:
         y -= 10 * mm
 
         c.setFont("Arial", FONT_SIZE_NORMAL)
-        if self.inv.get("is_export", False):
+        custom_text = self.inv.get("invoice_note_text", "").strip()
+        if custom_text:
+            for line in custom_text.splitlines():
+                if line.strip():
+                    c.drawString(COL_EAN, y, line.strip())
+                    y -= 6 * mm
+        elif self.inv.get("is_export", False):
             c.drawString(COL_EAN, y, FOOTER.get("delivery_terms", "Lieferbedinungen: EXW 1230 Wien, Mellergasse 4-02"))
             y -= 8 * mm
         else:

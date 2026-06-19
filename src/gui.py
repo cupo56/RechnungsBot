@@ -413,6 +413,14 @@ class RechnungsBot:
         ttk.Checkbutton(frame, text="QR-Code",
                         variable=self.var_girocode_enabled).grid(row=7, column=0, sticky=tk.W, pady=3)
 
+        # Rechnungs-Notiztext (ersetzt bei Eingabe den Standard-Footer-Text der Rechnung)
+        ttk.Label(frame, text="Rechnungs-Notiz:").grid(row=8, column=0, sticky=tk.NW, pady=(4, 0))
+        self.invoice_note_text = tk.Text(
+            frame, height=2, width=28,
+            font=("Segoe UI", 9), relief="solid", bd=1, wrap="word",
+        )
+        self.invoice_note_text.grid(row=8, column=1, sticky=tk.EW, padx=(8, 0), pady=(4, 2))
+
     def _on_delivery_toggled(self):
         state = "normal" if self.var_delivery_note.get() else "disabled"
         self.weight_entry.configure(state=state)
@@ -892,6 +900,7 @@ class RechnungsBot:
             "girocode_enabled":     self.var_girocode_enabled.get(),
             "weight":               self.var_weight.get().strip(),
             "delivery_note_text":   self.delivery_note_text.get("1.0", tk.END).strip(),
+            "invoice_note_text":    self.invoice_note_text.get("1.0", tk.END).strip(),
         }
         customer_data = {
             "name":     cust_name,
@@ -1167,6 +1176,9 @@ class RechnungsBot:
             self.delivery_note_text.configure(state="normal")
             self.delivery_note_text.insert("1.0", saved_dlv_text)
         self._on_delivery_toggled()
+        saved_invoice_note = cfg.get("default_invoice_note_text", "")
+        if saved_invoice_note:
+            self.invoice_note_text.insert("1.0", saved_invoice_note)
         self.var_is_export.set(cfg.get("default_is_export", False))
         self.var_girocode_enabled.set(cfg.get("default_girocode_enabled", True))
         cust = cfg.get("last_customer", {})
@@ -1207,6 +1219,7 @@ class RechnungsBot:
             "default_girocode_enabled":     self.var_girocode_enabled.get(),
             "default_weight":               self.var_weight.get().strip(),
             "default_delivery_note_text":   self.delivery_note_text.get("1.0", tk.END).strip(),
+            "default_invoice_note_text":    self.invoice_note_text.get("1.0", tk.END).strip(),
             "last_customer": {
                 "name":     self.var_cust_name.get().strip(),
                 "street":   self.var_cust_street.get().strip(),

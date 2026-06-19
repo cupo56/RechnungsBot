@@ -62,6 +62,7 @@ DEFAULTS = {
     "default_girocode_enabled": True,
     "default_weight": "",
     "default_delivery_note_text": "",
+    "default_invoice_note_text": "",
     "last_customer": {
         "name": "",
         "street": "",
@@ -82,6 +83,7 @@ DEFAULTS = {
         "country": "",
         "vat": "",
     },
+    "provision_customer_templates": {},
 }
 
 

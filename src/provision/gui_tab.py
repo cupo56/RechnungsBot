@@ -8,7 +8,7 @@ import subprocess
 import datetime
 import threading
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, simpledialog
 
 from src.config import load_config, save_config
 from src.pdf.commission_invoice import generate_commission_invoice
@@ -19,6 +19,14 @@ _BLUE_DIS = "#9BBFE0"
 _GREEN    = "#1A7F3C"
 _RED      = "#C0392B"
 _MUTED    = "#64748B"
+
+# Spalten der Positionstabelle, die per Klick auf die Zelle bearbeitbar sind:
+# Spalten-ID -> (Schlüssel im items-Dict, Werttyp)
+_EDITABLE_COLUMNS = {
+    "reference":   ("reference", str),
+    "description": ("description", str),
+    "netto":       ("net_amount", float),
+}
 
 
 def _format_amount(val):
@@ -31,6 +39,7 @@ class ProvisionTab:
 
     def __init__(self, parent):
         self._items = []
+        self._cell_edit = None
         self.config = load_config()
 
         frame = ttk.Frame(parent, padding=(16, 12, 16, 4))
@@ -102,6 +111,19 @@ class ProvisionTab:
         cust.pack(fill=tk.X)
         cust.columnconfigure(1, weight=1)
 
+        # Vorlagen-Leiste
+        tpl = ttk.Frame(cust)
+        tpl.grid(row=0, column=0, columnspan=2, sticky=tk.EW, pady=(0, 8))
+        ttk.Label(tpl, text="Vorlage:").pack(side=tk.LEFT)
+        self.var_template = tk.StringVar()
+        self.cb_templates = ttk.Combobox(tpl, textvariable=self.var_template,
+                                          state="readonly", width=17)
+        self.cb_templates.pack(side=tk.LEFT, padx=(5, 4))
+        self.cb_templates.bind("<<ComboboxSelected>>", self._on_template_selected)
+        ttk.Button(tpl, text="💾 Speichern",
+                   command=self._save_template, width=12).pack(side=tk.LEFT, padx=(0, 3))
+        ttk.Button(tpl, text="🗑", command=self._delete_template, width=3).pack(side=tk.LEFT)
+
         recipient = cfg.get("last_provision_recipient", {})
         self.var_cust_name    = tk.StringVar(value=recipient.get("name", ""))
         self.var_cust_street  = tk.StringVar(value=recipient.get("street", ""))
@@ -113,11 +135,11 @@ class ProvisionTab:
             ttk.Label(cust, text=label).grid(row=row, column=0, sticky=tk.W, pady=3)
             ttk.Entry(cust, textvariable=var).grid(row=row, column=1, sticky=tk.EW, pady=3, padx=(8, 0))
 
-        cust_row("Firma:", self.var_cust_name, 0)
-        cust_row("Straße:", self.var_cust_street, 1)
-        cust_row("PLZ/Ort:", self.var_cust_plz, 2)
-        cust_row("Land:", self.var_cust_country, 3)
-        cust_row("VAT-Nr.:", self.var_cust_vat, 4)
+        cust_row("Firma:", self.var_cust_name, 1)
+        cust_row("Straße:", self.var_cust_street, 2)
+        cust_row("PLZ/Ort:", self.var_cust_plz, 3)
+        cust_row("Land:", self.var_cust_country, 4)
+        cust_row("VAT-Nr.:", self.var_cust_vat, 5)
 
         # ──────────────────────────────────────────────────────────
         # Rechte Spalte: Positionserfassung
@@ -157,35 +179,31 @@ class ProvisionTab:
         tbl = ttk.LabelFrame(right, text="  Positionen  ", padding=(6, 6))
         tbl.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
 
-        cols = ("reference", "description", "netto", "brutto")
+        ttk.Label(
+            tbl,
+            text="Klick auf Referenz, Beschreibung oder Netto, um die Position zu bearbeiten. "
+                 "Mit 🗑 lässt sich eine Position entfernen.",
+            foreground=_MUTED, font=("Segoe UI", 8), wraplength=320, justify=tk.LEFT,
+        ).pack(anchor=tk.W, pady=(0, 4))
+
+        cols = ("reference", "description", "netto", "brutto", "delete")
         self.tree = ttk.Treeview(tbl, columns=cols, show="headings", height=8, selectmode="browse")
         self.tree.heading("reference",   text="Referenz",     anchor=tk.W)
         self.tree.heading("description", text="Beschreibung", anchor=tk.W)
         self.tree.heading("netto",       text="Netto",        anchor=tk.E)
         self.tree.heading("brutto",      text="Brutto",       anchor=tk.E)
+        self.tree.heading("delete",      text="",             anchor=tk.CENTER)
         self.tree.column("reference",   width=120, anchor=tk.W, minwidth=80)
         self.tree.column("description", width=140, anchor=tk.W, minwidth=80)
         self.tree.column("netto",       width=85,  anchor=tk.E, minwidth=70, stretch=False)
         self.tree.column("brutto",      width=85,  anchor=tk.E, minwidth=70, stretch=False)
+        self.tree.column("delete",      width=36,  anchor=tk.CENTER, minwidth=36, stretch=False)
+        self.tree.bind("<Button-1>", self._on_tree_click)
 
         sb = ttk.Scrollbar(tbl, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=sb.set)
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
-
-        btn_row = ttk.Frame(right)
-        btn_row.pack(fill=tk.X, pady=(6, 0))
-        self.btn_remove = tk.Button(
-            btn_row,
-            text="✕  Ausgewählte Position entfernen",
-            font=("Segoe UI", 9),
-            bg="#F1F5F9", fg=_RED,
-            activebackground="#FEE2E2", activeforeground=_RED,
-            relief="flat", bd=0, padx=10, pady=5,
-            cursor="hand2",
-            command=self._remove_selected,
-        )
-        self.btn_remove.pack(side=tk.LEFT)
 
         self.summary_label = ttk.Label(right, text="", font=("Segoe UI", 10, "bold"))
         self.summary_label.pack(anchor=tk.E, pady=(8, 0))
@@ -217,6 +235,7 @@ class ProvisionTab:
         self.var_ust_percent.trace_add("write", lambda *_: self._on_ust_changed())
 
         self._refresh_summary()
+        self._update_template_combobox()
 
     # ──────────────────────────────────────────────────────────────
     # Positionsverwaltung
@@ -261,18 +280,8 @@ class ProvisionTab:
         self._refresh_summary()
         self._refresh_create_button()
 
-    def _remove_selected(self):
-        sel = self.tree.selection()
-        if not sel:
-            return
-        idx = self.tree.index(sel[0])
-        if 0 <= idx < len(self._items):
-            del self._items[idx]
-        self._refresh_table()
-        self._refresh_summary()
-        self._refresh_create_button()
-
     def _refresh_table(self):
+        self._cancel_cell_edit()
         self.tree.delete(*self.tree.get_children())
         ust_pct = self._current_ust_percent()
         for item in self._items:
@@ -283,6 +292,7 @@ class ProvisionTab:
                 item["description"],
                 f"€ {_format_amount(netto)}",
                 f"€ {_format_amount(brutto)}",
+                "🗑",
             ))
 
     def _refresh_summary(self):
@@ -311,6 +321,160 @@ class ProvisionTab:
         self._refresh_summary()
         self._refresh_create_button()
         self.status_label.configure(text="")
+
+    # ──────────────────────────────────────────────────────────────
+    # Zellen-Bearbeitung
+    # ──────────────────────────────────────────────────────────────
+
+    def _on_tree_click(self, event):
+        if self.tree.identify_region(event.x, event.y) != "cell":
+            return
+        # Offene Zelleneditierung zuerst übernehmen — das baut die Tabelle neu auf
+        # (neue Zeilen-IDs), daher muss row_id erst danach ermittelt werden.
+        self._commit_cell_edit()
+        row_id = self.tree.identify_row(event.y)
+        if not row_id:
+            return
+        col_id = self._column_id_at(event.x)
+        if col_id == "delete":
+            self._delete_item(row_id)
+        elif col_id in _EDITABLE_COLUMNS:
+            self._start_cell_edit(row_id, col_id)
+
+    def _delete_item(self, row_id):
+        index = self.tree.index(row_id)
+        item = self._items[index]
+        if not messagebox.askyesno("Position entfernen",
+                                    f"Soll die Position „{item['description']}“ wirklich entfernt werden?"):
+            return
+        del self._items[index]
+        self._refresh_table()
+        self._refresh_summary()
+        self._refresh_create_button()
+
+    def _column_id_at(self, x):
+        col = self.tree.identify_column(x)
+        try:
+            idx = int(col[1:]) - 1
+        except ValueError:
+            return None
+        cols = self.tree["columns"]
+        return cols[idx] if 0 <= idx < len(cols) else None
+
+    def _start_cell_edit(self, row_id, col_id):
+        self._commit_cell_edit()
+        bbox = self.tree.bbox(row_id, col_id)
+        if not bbox:
+            return
+        x, y, width, height = bbox
+        index = self.tree.index(row_id)
+        field_key, value_type = _EDITABLE_COLUMNS[col_id]
+        current = self._items[index][field_key]
+
+        if value_type is float:
+            text, justify = f"{current:.2f}".replace(".", ","), tk.RIGHT
+        else:
+            text, justify = str(current), tk.LEFT
+
+        var   = tk.StringVar(value=text)
+        entry = ttk.Entry(self.tree, textvariable=var, justify=justify)
+        entry.place(x=x, y=y, width=width, height=height)
+        entry.focus_set()
+        entry.select_range(0, tk.END)
+
+        self._cell_edit = (index, field_key, value_type, entry, var)
+        entry.bind("<Return>",   lambda e: self._commit_cell_edit())
+        entry.bind("<KP_Enter>", lambda e: self._commit_cell_edit())
+        entry.bind("<Escape>",   lambda e: self._cancel_cell_edit())
+        entry.bind("<FocusOut>", lambda e: self._commit_cell_edit())
+
+    def _commit_cell_edit(self):
+        if not self._cell_edit:
+            return
+        index, field_key, value_type, entry, var = self._cell_edit
+        self._cell_edit = None
+        raw = var.get().strip()
+        entry.destroy()
+
+        if value_type is float:
+            try:
+                value = float(raw.replace(",", "."))
+            except ValueError:
+                messagebox.showwarning("Ungültiger Betrag", f"'{raw}' ist kein gültiger Betrag.")
+                return
+            if value <= 0:
+                messagebox.showwarning("Ungültiger Betrag", "Der Netto-Betrag muss größer als 0 sein.")
+                return
+            self._items[index][field_key] = value
+        else:
+            if field_key == "description" and not raw:
+                messagebox.showwarning("Beschreibung fehlt", "Die Beschreibung darf nicht leer sein.")
+                return
+            if field_key == "reference" and raw and not raw.lower().startswith("rechn"):
+                raw = f"Rechn.Nr.{raw}"
+            self._items[index][field_key] = raw
+
+        self._refresh_table()
+        self._refresh_summary()
+
+    def _cancel_cell_edit(self):
+        if not self._cell_edit:
+            return
+        _, _, _, entry, _ = self._cell_edit
+        self._cell_edit = None
+        entry.destroy()
+
+    # ──────────────────────────────────────────────────────────────
+    # Empfänger-Vorlagen
+    # ──────────────────────────────────────────────────────────────
+
+    def _update_template_combobox(self):
+        names = list(self.config.get("provision_customer_templates", {}).keys())
+        self.cb_templates["values"] = names
+        if self.var_template.get() not in names:
+            self.var_template.set("")
+
+    def _on_template_selected(self, _=None):
+        name = self.var_template.get()
+        tpl  = self.config.get("provision_customer_templates", {}).get(name, {})
+        self.var_cust_name.set(tpl.get("name", ""))
+        self.var_cust_street.set(tpl.get("street", ""))
+        self.var_cust_plz.set(tpl.get("plz_city", ""))
+        self.var_cust_country.set(tpl.get("country", ""))
+        self.var_cust_vat.set(tpl.get("vat", ""))
+
+    def _save_template(self):
+        tpl_name = simpledialog.askstring(
+            "Vorlage speichern", "Name für diese Vorlage:",
+            initialvalue=self.var_cust_name.get().strip(), parent=self.tree.winfo_toplevel())
+        if not tpl_name or not tpl_name.strip():
+            return
+        tpl_name = tpl_name.strip()
+        templates = self.config.setdefault("provision_customer_templates", {})
+        templates[tpl_name] = {
+            "name":     self.var_cust_name.get().strip(),
+            "street":   self.var_cust_street.get().strip(),
+            "plz_city": self.var_cust_plz.get().strip(),
+            "country":  self.var_cust_country.get().strip(),
+            "vat":      self.var_cust_vat.get().strip(),
+        }
+        save_config({"provision_customer_templates": templates})
+        self._update_template_combobox()
+        self.var_template.set(tpl_name)
+        self.status_label.configure(text=f"Vorlage '{tpl_name}' gespeichert.", foreground=_GREEN)
+
+    def _delete_template(self):
+        name = self.var_template.get()
+        if not name:
+            messagebox.showwarning("Keine Vorlage", "Bitte zuerst eine Vorlage auswählen.")
+            return
+        if messagebox.askyesno("Löschen", f"Vorlage '{name}' wirklich löschen?"):
+            templates = self.config.get("provision_customer_templates", {})
+            templates.pop(name, None)
+            save_config({"provision_customer_templates": templates})
+            self._update_template_combobox()
+            self.var_template.set("")
+            self.status_label.configure(text=f"Vorlage '{name}' gelöscht.", foreground=_GREEN)
 
     # ──────────────────────────────────────────────────────────────
     # PDF-Erstellung
@@ -426,5 +590,6 @@ class ProvisionTab:
             "default_provision_ust_percent":      ust_pct,
             "default_provision_girocode_enabled": self.var_girocode_enabled.get(),
             "last_provision_recipient":           dict(customer_data),
+            "provision_customer_templates":       self.config.get("provision_customer_templates", {}),
         })
         self.var_nr.set(f"{new_nr}/{year}")

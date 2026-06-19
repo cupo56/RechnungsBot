@@ -87,7 +87,6 @@ class CommissionInvoiceGenerator:
         self._start_new_page()
         y = self._draw_page_header(total_pages)
         y = self._draw_table_header(y)
-        y = self._draw_note_row(y)
 
         for i, item in enumerate(self.items):
             is_last = (i == len(self.items) - 1)
@@ -126,11 +125,11 @@ class CommissionInvoiceGenerator:
                 h += 4.0
         if self.cust.get("vat", "").strip():
             h += 4.0
-        h += 4.0   # Abstand nach Adresse
-        h += 6.0   # Rechnungsnummer / Datum
+        h += 18.0   # Abstand nach Adresse
+        h += 6.0 + 2 * 6.0   # Rechnungsnummer / Datum + zusätzlicher Abstand (2 Absätze)
+        h += 6.0   # Hinweiszeile "Provisionsverrechnung für unten angeführte Rechnungen"
         # Tabellenüberschriften (_draw_table_header): 2 mm gap + 4 mm + ROW_HEIGHT
         h += 2.0 + 4.0 + 6.0
-        h += 6.0   # Hinweiszeile "Provisionsverrechnung für unten angeführte Rechnungen"
         return h * mm
 
     def _estimate_total_pages(self):
@@ -205,14 +204,19 @@ class CommissionInvoiceGenerator:
             c.drawString(MARGIN_LEFT, y, f"VAT: {vat}")
             y -= 4 * mm
 
-        y -= 4 * mm
+        y -= 18 * mm
 
         # --- Rechnungsnummer & Datum ---
         c.setFont("Arial-Bold", FONT_SIZE_TITLE)
         c.drawString(MARGIN_LEFT, y, f"Rechnung Nr.{self.inv['number']}")
         c.setFont("Arial", FONT_SIZE_NORMAL)
         c.drawRightString(MARGIN_RIGHT, y, f"Rechnungsdatum: {self.inv['date']}")
-        y -= 6 * mm
+        y -= 6 * mm + 2 * ROW_HEIGHT
+
+        if self.page_num == 1:
+            c.setFont("Arial-Bold", FONT_SIZE_SMALL + 2)
+            c.drawCentredString(PAGE_W / 2, y, NOTE_TEXT)
+            y -= ROW_HEIGHT
 
         footer_y = draw_bank_footer(self.c)
         if self.inv.get("girocode_enabled", True):
@@ -266,24 +270,6 @@ class CommissionInvoiceGenerator:
 
         return y
 
-    def _draw_note_row(self, y):
-        """Zeichnet die einmalige Hinweiszeile 'Provisionsverrechnung für
-        unten angeführte Rechnungen' direkt unter der Tabellenüberschrift (nur Seite 1)."""
-        c = self.c
-
-        if self._row_counter % 2 == 1:
-            c.setFillColorRGB(0.94, 0.94, 0.94)
-            c.rect(MARGIN_LEFT, y - 1.5 * mm, MARGIN_RIGHT - MARGIN_LEFT, ROW_HEIGHT, fill=1, stroke=0)
-            c.setFillColorRGB(0, 0, 0)
-
-        self._row_counter += 1
-
-        c.setFont("Arial-Bold", FONT_SIZE_SMALL)
-        c.drawString(COL_BESCHR_L, y, NOTE_TEXT)
-
-        y -= ROW_HEIGHT
-        return y
-
     def _draw_item_row(self, y, item):
         """Zeichnet eine Positionszeile (Referenz links, Beschreibung rechts in der Spalte)."""
         c = self.c
@@ -304,14 +290,15 @@ class CommissionInvoiceGenerator:
         c.drawCentredString(COL_MENGE_C, y, "1")
 
         col_width = COL_BESCHR_R - COL_BESCHR_L
+        desc_x = COL_BESCHR_L + col_width * 0.5
         reference = item.get("reference", "").strip()
         description = item.get("description", "").strip()
         if reference:
             ref_text = truncate_text(reference, "Arial", FONT_SIZE_SMALL, col_width * 0.45)
             c.drawString(COL_BESCHR_L, y, ref_text)
         if description:
-            desc_text = truncate_text(description, "Arial", FONT_SIZE_SMALL, col_width * 0.5)
-            c.drawRightString(COL_BESCHR_R, y, desc_text)
+            desc_text = truncate_text(description, "Arial", FONT_SIZE_SMALL, COL_BESCHR_R - desc_x)
+            c.drawString(desc_x, y, desc_text)
 
         self._draw_amount_left(self._ep_euro_x, y, net_amount)
         self._draw_amount_left(self._gp_euro_x, y, gross_amount)
@@ -405,16 +392,18 @@ class CommissionInvoiceGenerator:
             print(f"[RechnungsBot] GiroCode konnte nicht erzeugt werden: {e}")
 
     def _draw_footer(self, y):
-        """Zeichnet die Fußzeilen-Hinweistexte (Leistungsdatum, Mahnspesen/Gerichtsstand)."""
+        """Zeichnet die Fußzeilen-Hinweistexte (Leistungsdatum, Mahnspesen/Gerichtsstand)
+        fix am unteren Seitenrand, mit einem Absatz Abstand zur Bankverbindung
+        (draw_bank_footer, oberste Zeile bei MARGIN_BOTTOM + 3 mm)."""
         c = self.c
 
-        y -= 10 * mm
+        bank_top = MARGIN_BOTTOM + 3 * mm
+        line2_y = bank_top + 3 * ROW_HEIGHT
+        line1_y = line2_y + 5 * mm
 
         c.setFont("Arial", FONT_SIZE_NORMAL)
-        c.drawString(MARGIN_LEFT, y, FOOTER.get("eu_text_2", "Leistungsdatum ist gleich dem Rechnungsdatum"))
-        y -= 5 * mm
-        c.drawString(MARGIN_LEFT, y, FOOTER.get("eu_text_3", "Beim Zahlungsverzug sind sämtliche Mahn.-und Inkassospesen zu ersetzen.Gerichtsstand ist Wien."))
-        y -= 8 * mm
+        c.drawString(MARGIN_LEFT, line1_y, FOOTER.get("eu_text_2", "Leistungsdatum ist gleich dem Rechnungsdatum"))
+        c.drawString(MARGIN_LEFT, line2_y, FOOTER.get("eu_text_3", "Beim Zahlungsverzug sind sämtliche Mahn.-und Inkassospesen zu ersetzen.Gerichtsstand ist Wien."))
 
         return y
 

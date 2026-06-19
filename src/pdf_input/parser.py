@@ -1,8 +1,8 @@
 """
 PDF-Parser für RechnungsBot.
 Liest Lieferanten-PDFs ein und extrahiert bestellte Positionen.
-Unterstützt CIPO-Format (Daten in Tabellenzellen), MATIVA-Format und
-FCT-Format (Daten im Fließtext).
+Unterstützt CIPO-Format (Daten in Tabellenzellen), MATIVA-Format,
+FCT-Format, PWV-Format und ZNZ-Format (jeweils Daten im Fließtext).
 Gibt die gleiche Dict-Struktur wie parse_excel() zurück.
 """
 
@@ -40,6 +40,31 @@ _RE_FCT_LINE = re.compile(
 
 # FCT-Format EAN-Zeile (eigene Zeile nach der Artikelzeile, ggf. nach Umbruchzeilen)
 _RE_FCT_EAN = re.compile(r'^\d{12,14}$')
+
+# PWV-Format (Parfumeriewarenvertriebs GmbH) Artikelzeile:
+# "1 056L2850301 La Vie est Belle EdP Vapo 30ml 7 STK 32,07 224,49"
+# Gruppen: Beschreibung, Menge, Einzelpreis (Gesamtpreis wird verworfen)
+_RE_PWV_LINE = re.compile(
+    r'^\d+\s+\S+\s+(.+?)\s+(\d+)\s+STK\s+([\d.,]+)\s+[\d.,]+\s*$'
+)
+
+# PWV-Format EAN-Zeile (eigene Zeile nach der Artikelzeile, ggf. nach Umbruchzeilen)
+_RE_PWV_EAN = re.compile(r'^EAN\s+(\d{12,14})\s*$')
+
+# ZNZ-Format (ZNZ ELECTRONICS, s.r.o.) Artikelzeile:
+# "1 100130496 Armaf Club de Nuit Intense Man Perfumed Deostick 75 g (man)"
+# Gruppen: Artikelnummer (verworfen), Beschreibung
+_RE_ZNZ_ITEM = re.compile(r'^\d+\s+\S+\s+(.+)$')
+
+# ZNZ-Format Datenzeile (eigene Zeile nach der Artikelzeile, ggf. nach Umbruchzeilen):
+# "4,00 ks 7,33 29,32 0 33072000 0 29,32"
+# Gruppen: Menge, Einzelpreis, Zolltarifnummer (8-stellig, optional)
+# Dienstleistungspositionen (z.B. "Transport") haben keine Zolltarifnummer
+# und werden anhand der fehlenden Gruppe 3 übersprungen.
+_RE_ZNZ_DATA = re.compile(
+    r'^(\d+),\d{2}\s+ks\s+([\d,]+)\s+[\d,]+\s+\d+\s+(?:(\d{8})\s+)?\d+\s+[\d,]+\s*$',
+    re.IGNORECASE,
+)
 
 # Keywords zur Erkennung der Produkt-Tabellen-Kopfzeile (CIPO)
 _HEADER_KEYWORDS = ("unit price", "quantity", "mennyiség", "egységár")
@@ -213,11 +238,134 @@ def _parse_fct(filepath: str) -> list[dict]:
     return items
 
 
+def _parse_pwv(filepath: str) -> list[dict]:
+    """PWV-Format (Parfumeriewarenvertriebs GmbH): Produktdaten im Fließtext,
+    EAN folgt in eigener Zeile mit 'EAN'-Präfix.
+
+    Beispiel:
+        1 056L2850301 La Vie est Belle EdP Vapo 30ml 7 STK 32,07 224,49
+        EAN 3605532612690
+
+    Mehrzeilige Produktnamen werden über Fortsetzungszeilen bis zur EAN-Zeile gesammelt:
+        5 052LE3108 Acqua di Gio p.H. Profondo EdP 4 STK 43,57 174,28
+        50ml
+        EAN 3614273953856
+    """
+    all_lines: list[str] = []
+    with pdfplumber.open(filepath) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if text:
+                all_lines.extend(text.split("\n"))
+
+    items = []
+    i = 0
+    while i < len(all_lines):
+        m = _RE_PWV_LINE.match(all_lines[i].strip())
+        if not m:
+            i += 1
+            continue
+
+        desc_parts = [m.group(1).strip()]
+        qty        = int(m.group(2))
+        unit_price = _cell_float(m.group(3))
+        i += 1
+
+        ean = ""
+        while i < len(all_lines):
+            cont = all_lines[i].strip()
+            m_ean = _RE_PWV_EAN.match(cont)
+            if m_ean:
+                ean = m_ean.group(1)
+                i += 1
+                break
+            if not cont or _RE_PWV_LINE.match(cont):
+                break
+            desc_parts.append(cont)
+            i += 1
+
+        items.append({
+            "ean":          ean,
+            "product":      _clean(" ".join(desc_parts)),
+            "quantity":     qty,
+            "source_price": unit_price,
+        })
+
+    return items
+
+
+def _parse_znz(filepath: str) -> list[dict]:
+    """ZNZ-Format (ZNZ ELECTRONICS, s.r.o.): Artikelzeile + Datenzeile im Fließtext.
+
+    Beispiel:
+        1 100130496 Armaf Club de Nuit Intense Man Perfumed Deostick 75 g (man)
+        4,00 ks 7,33 29,32 0 33072000 0 29,32
+
+    Die Positionstabelle beginnt erst nach der Kopfzeile mit "Quantity" und
+    "Unit Price" und endet bei "Invoice total" – nur in diesem Bereich wird
+    nach Artikel-/Datenzeilen gesucht, um Fließtext aus Adress- und
+    Kopfblöcken nicht versehentlich als Position zu erkennen.
+    """
+    all_lines: list[str] = []
+    with pdfplumber.open(filepath) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if text:
+                all_lines.extend(text.split("\n"))
+
+    items = []
+    in_table = False
+    i = 0
+    while i < len(all_lines):
+        line = all_lines[i].strip()
+
+        if not in_table:
+            if "Quantity" in line and "Unit Price" in line:
+                in_table = True
+            i += 1
+            continue
+
+        if line.startswith("Invoice total"):
+            in_table = False
+            i += 1
+            continue
+
+        m_item = _RE_ZNZ_ITEM.match(line)
+        if not m_item:
+            i += 1
+            continue
+
+        desc_parts = [m_item.group(1).strip()]
+        i += 1
+
+        m_data = None
+        while i < len(all_lines):
+            cont = all_lines[i].strip()
+            m_data = _RE_ZNZ_DATA.match(cont)
+            if m_data:
+                i += 1
+                break
+            if not cont or _RE_ZNZ_ITEM.match(cont) or cont.startswith("Invoice total"):
+                break
+            desc_parts.append(cont)
+            i += 1
+
+        if m_data and m_data.group(3):
+            items.append({
+                "ean":          "",
+                "product":      _clean(" ".join(desc_parts)),
+                "quantity":     int(m_data.group(1)),
+                "source_price": _cell_float(m_data.group(2)),
+            })
+
+    return items
+
+
 def parse_pdf(filepath: str) -> list[dict]:
     """
     Liest eine Lieferanten-PDF-Datei und gibt bestellte Positionen zurück.
-    Versucht zuerst das CIPO-Format (Tabellenzellen), dann das MATIVA-Format
-    und das FCT-Format (jeweils Fließtext).
+    Versucht zuerst das CIPO-Format (Tabellenzellen), dann das MATIVA-Format,
+    das FCT-Format, das PWV-Format und das ZNZ-Format (jeweils Fließtext).
 
     Returns:
         list[dict]: Liste von Positionen mit Schlüsseln:
@@ -233,6 +381,12 @@ def parse_pdf(filepath: str) -> list[dict]:
 
     if not items:
         items = _parse_fct(filepath)
+
+    if not items:
+        items = _parse_pwv(filepath)
+
+    if not items:
+        items = _parse_znz(filepath)
 
     if not items:
         raise ValueError(
