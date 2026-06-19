@@ -84,6 +84,19 @@ DEFAULTS = {
         "vat": "",
     },
     "provision_customer_templates": {},
+    "last_credit_note_number": "",
+    "default_credit_note_ust_enabled": True,
+    "default_credit_note_ust_percent": 20.0,
+    "default_credit_note_girocode_enabled": True,
+    "last_credit_note_recipient": {
+        "name": "",
+        "street": "",
+        "plz_city": "",
+        "country": "",
+        "phone": "",
+        "vat": "",
+    },
+    "credit_note_customer_templates": {},
 }
 
 

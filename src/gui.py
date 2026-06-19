@@ -18,6 +18,7 @@ from src.pdf.invoice import generate_invoice
 from src.pdf.delivery_note import generate_delivery_note
 from src.compare.gui_tab import VergleichsTab
 from src.provision.gui_tab import ProvisionTab
+from src.credit_note.gui_tab import CreditNoteTab
 
 try:
     from tkinterdnd2 import TkinterDnD, DND_FILES
@@ -146,6 +147,10 @@ class RechnungsBot:
         tab_provision = ttk.Frame(self.notebook)
         self.notebook.add(tab_provision, text="  💰  Provisionsrechnung  ")
         ProvisionTab(tab_provision)
+
+        tab_credit_note = ttk.Frame(self.notebook)
+        self.notebook.add(tab_credit_note, text="  🧾  Gutschriften  ")
+        CreditNoteTab(tab_credit_note)
 
         main = ttk.Frame(self._tab_rechnung, padding=(16, 12, 16, 4))
         main.pack(fill=tk.BOTH, expand=True)

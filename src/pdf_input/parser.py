@@ -1,8 +1,9 @@
 """
 PDF-Parser für RechnungsBot.
 Liest Lieferanten-PDFs ein und extrahiert bestellte Positionen.
-Unterstützt CIPO-Format (Daten in Tabellenzellen), MATIVA-Format,
-FCT-Format, PWV-Format und ZNZ-Format (jeweils Daten im Fließtext).
+Unterstützt CIPO-Format, ALINA-Rechnungsformat und ALINA-Bestellformat
+(jeweils Daten in Tabellenzellen) sowie MATIVA-Format, FCT-Format,
+PWV-Format und ZNZ-Format (jeweils Daten im Fließtext).
 Gibt die gleiche Dict-Struktur wie parse_excel() zurück.
 """
 
@@ -137,6 +138,81 @@ def _parse_cipo(filepath: str) -> list[dict]:
                     cell_text = " ".join(str(c) for c in row if c)
                     if cell_text.strip():
                         items.extend(_parse_data_cell(cell_text))
+    return items
+
+
+def _row_cells(row: list) -> list[str]:
+    """Reduziert eine Tabellenzeile auf ihre nicht-leeren Zellen (als Strings).
+
+    pdfplumber erzeugt bei vielen Gitterlinien zahlreiche leere/None-Spalten —
+    nach dem Filtern bleibt nur noch die tatsächlich befüllte Spaltenanzahl übrig,
+    anhand der sich Datenzeilen robust von Kopf-/Fortsetzungszeilen unterscheiden lassen.
+    """
+    return [str(c).strip() for c in row if c is not None and str(c).strip() != ""]
+
+
+def _is_ean_like(token: str) -> bool:
+    return token.isdigit() and 8 <= len(token) <= 14
+
+
+def _parse_alina_invoice(filepath: str) -> list[dict]:
+    """ALINA/FCT-Rechnungsformat ("Invoice ARGxxxx..."): Produktdaten in
+    Tabellenzellen, eine Zeile pro Position:
+        Pos. | EAN Code | Description | Quantity | Unit Price | Disc.% | Amount
+    Mehrzeilige Beschreibungen liegen bereits als "\\n" innerhalb der
+    Description-Zelle vor. Zusätzliche "Shp.No. ..."-Zeilen (eigene,
+    sonst leere Tabellenzeile) werden ignoriert.
+    """
+    items = []
+    with pdfplumber.open(filepath) as pdf:
+        for page in pdf.pages:
+            for table in page.extract_tables():
+                for row in table:
+                    cells = _row_cells(row)
+                    if len(cells) != 7:
+                        continue
+                    pos, ean, desc, qty, price, _disc, _amount = cells
+                    if not (pos.isdigit() and _is_ean_like(ean) and qty.isdigit()):
+                        continue
+                    items.append({
+                        "ean":          ean,
+                        "product":      _clean(desc),
+                        "quantity":     int(qty),
+                        "source_price": _cell_float(price),
+                    })
+    return items
+
+
+def _parse_alina_po(filepath: str) -> list[dict]:
+    """ALINA-Bestellformat ("BESTELLUNG EBxxxx..."): Produktdaten in
+    Tabellenzellen, eine Zeile pro Position:
+        Nr. | EAN Code | Beschreibung | Menge | EK-Preis | Betrag
+    Die "Nr."-Spalte enthält denselben Code wie "EAN Code", nur über zwei
+    Zeilen umgebrochen — sie wird verworfen, die volle EAN-Spalte verwendet.
+    Zusätzliche Beschreibungszeilen stehen in eigenen, sonst leeren
+    Tabellenzeilen (eine einzige nicht-leere Zelle) und werden an die
+    vorherige Position angehängt.
+    """
+    items = []
+    with pdfplumber.open(filepath) as pdf:
+        for page in pdf.pages:
+            for table in page.extract_tables():
+                for row in table:
+                    cells = _row_cells(row)
+                    if len(cells) == 1 and items:
+                        items[-1]["product"] = _clean(f'{items[-1]["product"]} {cells[0]}')
+                        continue
+                    if len(cells) != 6:
+                        continue
+                    _nr, ean, desc, menge, ek_preis, _betrag = cells
+                    if not (_is_ean_like(ean) and menge.isdigit()):
+                        continue
+                    items.append({
+                        "ean":          ean,
+                        "product":      _clean(desc),
+                        "quantity":     int(menge),
+                        "source_price": _cell_float(ek_preis),
+                    })
     return items
 
 
@@ -364,8 +440,8 @@ def _parse_znz(filepath: str) -> list[dict]:
 def parse_pdf(filepath: str) -> list[dict]:
     """
     Liest eine Lieferanten-PDF-Datei und gibt bestellte Positionen zurück.
-    Versucht zuerst das CIPO-Format (Tabellenzellen), dann das MATIVA-Format,
-    das FCT-Format, das PWV-Format und das ZNZ-Format (jeweils Fließtext).
+    Versucht zuerst die Tabellenzellen-Formate (CIPO, ALINA-Rechnung,
+    ALINA-Bestellung), dann die Fließtext-Formate (MATIVA, FCT, PWV, ZNZ).
 
     Returns:
         list[dict]: Liste von Positionen mit Schlüsseln:
@@ -375,6 +451,12 @@ def parse_pdf(filepath: str) -> list[dict]:
             - source_price (float): Einkaufspreis aus der Quelldatei
     """
     items = _parse_cipo(filepath)
+
+    if not items:
+        items = _parse_alina_invoice(filepath)
+
+    if not items:
+        items = _parse_alina_po(filepath)
 
     if not items:
         items = _parse_mativa(filepath)
