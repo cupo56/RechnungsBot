@@ -12,6 +12,7 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 
 from src.config import load_config, save_config
 from src.pdf.commission_invoice import generate_commission_invoice
+from src import database as db
 
 _BLUE     = "#1B6EC2"
 _BLUE_DK  = "#155599"
@@ -552,6 +553,9 @@ class ProvisionTab:
         messagebox.showinfo("Erfolgreich erstellt", f"Erfolgreich erstellt:\n\n{msg}")
         self._open_file(output_path)
 
+        # In Datenbank archivieren (nicht-blockierend)
+        self._save_to_db(output_path, invoice_nr, customer_data)
+
     def _on_pdf_error(self, error_msg):
         self.btn_create.configure(state="normal", bg=_BLUE, cursor="hand2")
         self.status_label.configure(text="Fehler bei der Erstellung.", foreground=_RED)
@@ -593,3 +597,34 @@ class ProvisionTab:
             "provision_customer_templates":       self.config.get("provision_customer_templates", {}),
         })
         self.var_nr.set(f"{new_nr}/{year}")
+
+    def _save_to_db(self, pdf_path, invoice_nr, customer_data):
+        """Speichert die Provisionsrechnung nicht-blockierend in der Datenbank."""
+        cfg = load_config()
+        if not cfg.get("db_enabled") or not db.is_configured(cfg):
+            return
+
+        netto = sum(i["net_amount"] for i in self._items)
+        ust_pct = self._current_ust_percent()
+        brutto = netto * (1 + ust_pct / 100)
+
+        invoice_data = {
+            "number":      invoice_nr,
+            "date":        self.var_date.get().strip(),
+            "ust_enabled": self.var_ust_enabled.get(),
+            "ust_percent": ust_pct,
+        }
+
+        def _thread():
+            success, msg = db.save_invoice(
+                cfg, invoice_data, customer_data, pdf_path,
+                total_netto=netto, total_brutto=brutto,
+                item_count=len(self._items), doc_type="provision",
+            )
+            if success:
+                self.tree.after(0, lambda: self.status_label.configure(
+                    text=self.status_label.cget("text") + "  ✅ DB archiviert"))
+            else:
+                print(f"[RechnungsBot DB] Warnung: {msg}")
+
+        threading.Thread(target=_thread, daemon=True).start()

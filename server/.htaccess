@@ -1,0 +1,8 @@
+# RechnungsBot API - Zugriffschutz
+# config.php vor direktem Zugriff schützen
+<Files "config.php">
+    Require all denied
+</Files>
+
+# Kein Directory-Listing
+Options -Indexes

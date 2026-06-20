@@ -97,6 +97,9 @@ DEFAULTS = {
         "vat": "",
     },
     "credit_note_customer_templates": {},
+    "db_api_url": "",
+    "db_api_key": "",
+    "db_enabled": False,
 }
 
 

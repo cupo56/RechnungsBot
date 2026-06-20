@@ -19,6 +19,8 @@ from src.pdf.delivery_note import generate_delivery_note
 from src.compare.gui_tab import VergleichsTab
 from src.provision.gui_tab import ProvisionTab
 from src.credit_note.gui_tab import CreditNoteTab
+from src.archive.gui_tab import ArchiveTab
+from src import database as db
 
 try:
     from tkinterdnd2 import TkinterDnD, DND_FILES
@@ -151,6 +153,15 @@ class RechnungsBot:
         tab_credit_note = ttk.Frame(self.notebook)
         self.notebook.add(tab_credit_note, text="  🧾  Gutschriften  ")
         CreditNoteTab(tab_credit_note)
+
+        tab_archive = ttk.Frame(self.notebook)
+        self.notebook.add(tab_archive, text="  🗄  Datenbank  ")
+        self._archive_tab = ArchiveTab(tab_archive)
+
+        # Lazy-load Archiv-Tab beim ersten Wechsel
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
+
+        self._archive_tab_index = self.notebook.index(tab_archive)
 
         main = ttk.Frame(self._tab_rechnung, padding=(16, 12, 16, 4))
         main.pack(fill=tk.BOTH, expand=True)
@@ -972,6 +983,11 @@ class RechnungsBot:
         if dlv_path:
             self._open_file(dlv_path)
 
+        # In Datenbank archivieren (nicht-blockierend)
+        self._save_to_db(output_path, "rechnung")
+        if dlv_path:
+            self._save_to_db(dlv_path, "lieferschein")
+
     def _create_delivery_note_only(self):
         collected = self._collect_invoice_data()
         if collected is None:
@@ -1012,6 +1028,9 @@ class RechnungsBot:
         self._set_status(msg)
         messagebox.showinfo("Erfolgreich erstellt", f"Erfolgreich erstellt:\n\n{msg}")
         self._open_file(output_path)
+
+        # In Datenbank archivieren (nicht-blockierend)
+        self._save_to_db(output_path, "lieferschein")
 
     def _on_delivery_note_error(self, error_msg):
         self._show_progress(False)
@@ -1234,6 +1253,59 @@ class RechnungsBot:
             },
             "customer_templates": self.config.get("customer_templates", {}),
         })
+
+    # ──────────────────────────────────────────────────────────────
+    # Datenbank-Archivierung
+    # ──────────────────────────────────────────────────────────────
+
+    def _on_tab_changed(self, event=None):
+        """Wird bei jedem Tab-Wechsel aufgerufen."""
+        try:
+            current = self.notebook.index(self.notebook.select())
+            if current == self._archive_tab_index:
+                self._archive_tab.load_if_needed()
+        except Exception:
+            pass
+
+    def _save_to_db(self, pdf_path, doc_type):
+        """Speichert ein Dokument nicht-blockierend in der Datenbank."""
+        cfg = load_config()
+        if not cfg.get("db_enabled") or not db.is_configured(cfg):
+            return
+
+        collected = self._collect_invoice_data()
+        if collected is None:
+            return
+        invoice_items, invoice_data, customer_data = collected
+
+        markup = self._get_markup_factor()
+        netto = sum(
+            qty * unit
+            for _, qty, _, unit in (
+                self._effective_values(it, markup) for it in self.items
+            )
+        )
+        ust_pct = 0.0
+        if invoice_data.get("ust_enabled"):
+            try:
+                ust_pct = float(invoice_data.get("ust_percent", 0))
+            except (ValueError, TypeError):
+                ust_pct = 0.0
+        brutto = netto * (1 + ust_pct / 100)
+
+        def _thread():
+            success, msg = db.save_invoice(
+                cfg, invoice_data, customer_data, pdf_path,
+                total_netto=netto, total_brutto=brutto,
+                item_count=len(self.items), doc_type=doc_type,
+            )
+            if success:
+                self.root.after(0, lambda: self._set_status(
+                    self.status_label.cget("text") + "  ✅ DB archiviert"))
+            else:
+                print(f"[RechnungsBot DB] Warnung: {msg}")
+
+        threading.Thread(target=_thread, daemon=True).start()
 
     def run(self):
         self.root.mainloop()
