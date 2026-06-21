@@ -104,7 +104,10 @@ def generate_invoice():
 
         return jsonify(result)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _error_response(
+            "Beim Erstellen der Rechnung/des Lieferscheins ist ein Fehler aufgetreten.",
+            detail=str(e),
+        )
     finally:
         for p in [invoice_path, delivery_path]:
             if os.path.exists(p):
@@ -134,7 +137,10 @@ def generate_provision():
         filename = f"Provisionsrechnung_{invoice_data.get('number', '').replace('/', '_')}.pdf"
         return jsonify({"pdf": pdf_b64, "filename": filename})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _error_response(
+            "Beim Erstellen der Provisionsrechnung ist ein Fehler aufgetreten.",
+            detail=str(e),
+        )
     finally:
         if os.path.exists(output_path):
             try:
@@ -163,7 +169,10 @@ def generate_credit_note():
         filename = f"Gutschrift_{invoice_data.get('number', '').replace('/', '_')}.pdf"
         return jsonify({"pdf": pdf_b64, "filename": filename})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _error_response(
+            "Beim Erstellen der Gutschrift ist ein Fehler aufgetreten.",
+            detail=str(e),
+        )
     finally:
         if os.path.exists(output_path):
             try:
