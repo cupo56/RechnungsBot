@@ -223,7 +223,9 @@ export default function Home() {
       const resp = await fetch('/api/parse', { method: 'POST', body: formData });
       if (!resp.ok) {
         const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-        throw new Error(errData.error || `Fehler ${resp.status}`);
+        const uploadErr = new Error(errData.error || `Fehler ${resp.status}`);
+        uploadErr.detail = errData.detail;
+        throw uploadErr;
       }
       const data = await resp.json();
       const parsed = data.items || [];
@@ -232,7 +234,7 @@ export default function Home() {
       setStatus({ text: `${parsed.length} Positionen aus '${file.name}' geladen.`, type: 'success' });
       setToast({ text: `✅ ${parsed.length} Positionen geladen`, type: 'success' });
     } catch (err) {
-      setStatus({ text: `Fehler: ${err.message}`, type: 'error' });
+      setStatus({ text: `Fehler: ${err.message}`, type: 'error', detail: err.detail });
       setToast({ text: `❌ ${err.message}`, type: 'error' });
     } finally {
       setLoading(false);
@@ -469,7 +471,9 @@ export default function Home() {
 
       if (!resp.ok) {
         const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-        throw new Error(errData.error || `Fehler ${resp.status}`);
+        const genErr = new Error(errData.error || `Fehler ${resp.status}`);
+        genErr.detail = errData.detail;
+        throw genErr;
       }
 
       const data = await resp.json();
@@ -525,7 +529,7 @@ export default function Home() {
         persistConfig(true);
       }
     } catch (err) {
-      setStatus({ text: `Fehler: ${err.message}`, type: 'error' });
+      setStatus({ text: `Fehler: ${err.message}`, type: 'error', detail: err.detail });
       setToast({ text: `❌ ${err.message}`, type: 'error' });
     } finally {
       setGenerating(false);
@@ -560,7 +564,7 @@ export default function Home() {
         onClick={onBrowse}
       >
         <span className="drop-zone-icon">
-          {loading ? '⏳' : loadedFile ? '✅' : '📂'}
+          {loading ? <span className="spinner"></span> : loadedFile ? '✅' : '📂'}
         </span>
         <p className="drop-zone-text">
           {loading
@@ -856,6 +860,9 @@ export default function Home() {
       <div className="status-bar" id="status-bar">
         <div className={`status-dot ${status.type === 'error' ? 'error' : status.type === 'loading' ? 'loading' : ''}`}></div>
         <span className="status-text">{status.text}</span>
+        {status.detail && (
+          <span className="status-detail">Technisch: {status.detail}</span>
+        )}
         {loading && (
           <div className="progress-bar-container">
             <div className="progress-bar-fill"></div>
