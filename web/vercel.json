@@ -1,11 +1,13 @@
 {
+  "buildCommand": "if [ -d ../src ]; then cp -r ../src ./api/src; fi && next build",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/:path*" }
   ],
   "functions": {
-    "api/*.py": {
+    "api/index.py": {
       "runtime": "@vercel/python@4.6.0",
-      "maxDuration": 30
+      "maxDuration": 30,
+      "includeFiles": "api/src/**"
     }
   }
 }

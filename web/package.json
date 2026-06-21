@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "node -e \"const fs = require('fs'); fs.cpSync('../src', './api/src', {recursive: true, force: true})\"",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

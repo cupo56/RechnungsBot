@@ -7,7 +7,11 @@ import tempfile
 import uuid
 
 # Add the project root to sys.path so 'src' can be imported
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if os.path.exists(os.path.join(current_dir, 'src')):
+    sys.path.append(current_dir)
+else:
+    sys.path.append(os.path.abspath(os.path.join(current_dir, '..', '..')))
 
 app = Flask(__name__)
 
