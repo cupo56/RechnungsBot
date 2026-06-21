@@ -693,6 +693,7 @@ body {
 /* ── Status Bar ────────────────────────────────────────── */
 .status-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 10px 20px;
@@ -701,6 +702,13 @@ body {
   border-radius: var(--radius-md);
   font-size: 0.8rem;
   color: var(--text-muted);
+}
+
+.status-detail {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  flex-basis: 100%;
+  margin-top: 2px;
 }
 
 .status-dot {
