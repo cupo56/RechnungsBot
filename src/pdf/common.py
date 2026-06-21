@@ -63,11 +63,13 @@ def register_fonts():
     except Exception:
         # Helvetica (eingebaut) unter den Namen "Arial"/"Arial-Bold" registrieren,
         # damit alle setFont("Arial", …)-Aufrufe weiterhin funktionieren.
-        _fonts = pdfmetrics._fonts
-        if "Arial" not in _fonts:
-            _fonts["Arial"]      = pdfmetrics.getFont("Helvetica")
-        if "Arial-Bold" not in _fonts:
-            _fonts["Arial-Bold"] = pdfmetrics.getFont("Helvetica-Bold")
+        # Muss über echte Font-Objekte mit passendem .fontName laufen, nicht über
+        # einen direkten Eintrag in pdfmetrics._fonts: pdfdoc.getInternalFontName()
+        # registriert Fonts beim PDF-Schreiben unter ihrem eigenen .fontName
+        # (z.B. "Helvetica-Bold"), nicht unter dem Dict-Key ("Arial-Bold") –
+        # sonst schlägt das Rendern mit "Font 'Arial-Bold' not known!" fehl.
+        pdfmetrics.registerFont(pdfmetrics.Font("Arial",      "Helvetica",      "WinAnsiEncoding"))
+        pdfmetrics.registerFont(pdfmetrics.Font("Arial-Bold", "Helvetica-Bold", "WinAnsiEncoding"))
     _font_registered = True
 
 
