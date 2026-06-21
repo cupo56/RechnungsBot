@@ -15,21 +15,6 @@ else:
 
 app = Flask(__name__)
 
-# --- DEBUG (temporary) ---
-@app.route('/api/debug', methods=['GET'])
-def debug_info():
-    info = {
-        "current_dir": current_dir,
-        "current_dir_listing": sorted(os.listdir(current_dir)) if os.path.isdir(current_dir) else None,
-        "src_exists_in_current_dir": os.path.exists(os.path.join(current_dir, 'src')),
-        "sys_path": sys.path,
-        "cwd": os.getcwd(),
-        "cwd_listing": sorted(os.listdir(os.getcwd())),
-        "file": os.path.abspath(__file__),
-    }
-    return jsonify(info)
-
-
 # --- PARSE ---
 @app.route('/api/parse', methods=['POST'])
 def parse_file():
