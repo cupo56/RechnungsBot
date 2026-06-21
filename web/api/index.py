@@ -15,6 +15,13 @@ else:
 
 app = Flask(__name__)
 
+
+def _error_response(friendly, status=500, detail=None):
+    body = {"error": friendly}
+    if detail:
+        body["detail"] = detail
+    return jsonify(body), status
+
 # --- PARSE ---
 @app.route('/api/parse', methods=['POST'])
 def parse_file():
@@ -53,7 +60,10 @@ def parse_file():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
-        return jsonify({"error": f"Unerwarteter Fehler: {e}"}), 500
+        return _error_response(
+            "Die Datei konnte nicht eingelesen werden. Bitte prüfe das Dateiformat oder versuche es erneut.",
+            detail=str(e),
+        )
     finally:
         try:
             os.remove(temp_path)
