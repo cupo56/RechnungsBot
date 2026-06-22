@@ -97,9 +97,9 @@ class DeliveryNoteGenerator:
                 h += 4.0
         if self.cust.get("vat", "").strip():
             h += 4.0
-        h += 20.0  # Abstand nach Adresse (+16mm für 4 Absätze)
+        h += 40.0  # Abstand nach Adresse (an manuellen Wert 40mm angepasst)
         h += 8.0   # Export-Slot (immer reserviert)
-        h += 14.0  # Lieferschein-Titel / Datum (+8mm für 2 Absätze)
+        h += 20.0  # Lieferschein-Titel / Datum (an manuellen Wert 20mm angepasst)
         # Tabellenüberschriften (_draw_table_header): 2 mm gap + 4 mm + ROW_HEIGHT
         h += 2.0 + 4.0 + 6.0
         return h * mm
@@ -177,14 +177,14 @@ class DeliveryNoteGenerator:
             c.drawString(MARGIN_LEFT, y, f"VAT: {vat}")
             y -= 4 * mm
 
-        y -= 28 * mm # 4 Absätze extra Abstand (vorher 12mm, jetzt 28mm)
+        y -= 48 * mm # Extra Abstand (vorher 28mm, jetzt 48mm passend zur Rechnung)
 
         # --- Lieferschein-Info & Datum ---
         c.setFont("Arial", FONT_SIZE_TITLE)
         c.drawString(MARGIN_LEFT, y, f"Lieferschein Zu Rechnung Nr.{self.inv['number']}")
         c.setFont("Arial", FONT_SIZE_TITLE)
         c.drawRightString(MARGIN_RIGHT, y, f"Datum: {self.inv['date']}")
-        y -= 14 * mm # 2 Absätze extra Abstand
+        y -= 20 * mm # Extra Abstand vor Tabelle
 
         draw_bank_footer(self.c)
 

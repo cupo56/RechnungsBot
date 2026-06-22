@@ -132,9 +132,9 @@ class InvoiceGenerator:
                 h += 4.0
         if self.cust.get("vat", "").strip():
             h += 4.0
-        h += 20.0  # Abstand nach Adresse (+16mm für 4 Absätze)
+        h += 40.0  # Abstand nach Adresse (an manuellen Wert 40mm angepasst)
         h += 6.0   # Rechnungsnummer / Datum
-        h += 14.0  # Export-Slot (immer reserviert, +8mm für 2 Absätze)
+        h += 20.0  # Export-Slot (an manuellen Wert 20mm angepasst)
         # Tabellenüberschriften (_draw_table_header): 2 mm gap + 4 mm + ROW_HEIGHT
         h += 2.0 + 4.0 + 6.0
         return h * mm
