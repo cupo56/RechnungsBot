@@ -327,7 +327,9 @@ export default function ProvisionPage() {
 
       if (!resp.ok) {
         const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-        throw new Error(errData.error || `Fehler ${resp.status}`);
+        const genErr = new Error(errData.error || `Fehler ${resp.status}`);
+        genErr.detail = errData.detail;
+        throw genErr;
       }
 
       const data = await resp.json();
@@ -356,7 +358,7 @@ export default function ProvisionPage() {
 
       persistConfig(true);
     } catch (err) {
-      setStatus({ text: `Fehler: ${err.message}`, type: 'error' });
+      setStatus({ text: `Fehler: ${err.message}`, type: 'error', detail: err.detail });
       setToast({ text: `❌ ${err.message}`, type: 'error' });
     } finally {
       setGenerating(false);
@@ -611,6 +613,9 @@ export default function ProvisionPage() {
         <div className="status-bar" style={{ marginTop: 24 }}>
           <div className={`status-dot ${status.type === 'error' ? 'error' : status.type === 'loading' ? 'loading' : 'success'}`}></div>
           <span className="status-text">{status.text}</span>
+          {status.detail && (
+            <span className="status-detail">Technisch: {status.detail}</span>
+          )}
         </div>
       )}
 
