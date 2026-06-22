@@ -212,7 +212,7 @@ class InvoiceGenerator:
             c.drawString(MARGIN_LEFT, y, f"VAT: {vat}")
             y -= 4 * mm
 
-        y -= 20 * mm # 4 Absätze extra Abstand
+        y -= 40 * mm # 4 Absätze extra Abstand
 
         # --- Rechnungsnummer & Datum ---
         c.setFont("Arial-Bold", FONT_SIZE_TITLE)
@@ -225,7 +225,7 @@ class InvoiceGenerator:
         if self.inv.get("is_export", False):
             c.setFont("Arial-Bold", FONT_SIZE_TITLE)
             c.drawCentredString(PAGE_W / 2, y, "EXPORT")
-        y -= 14 * mm # 2 Absätze extra Abstand
+        y -= 20 * mm # 2 Absätze extra Abstand
 
         footer_y = draw_bank_footer(self.c)
         if self.inv.get("girocode_enabled", True):
