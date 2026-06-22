@@ -15,6 +15,7 @@ const DEFAULT_CONFIG = {
   default_create_delivery_note: false,
   default_is_export: false,
   default_girocode_enabled: true,
+  default_eu_text_enabled: true,
   default_weight: '',
   default_delivery_note_text: '',
   default_invoice_note_text: '',
@@ -67,6 +68,7 @@ export default function Home() {
   const [invoiceNoteText, setInvoiceNoteText] = useState('');
   const [isExport, setIsExport] = useState(false);
   const [girocodeEnabled, setGirocodeEnabled] = useState(true);
+  const [euTextEnabled, setEuTextEnabled] = useState(true);
 
   // --- State: Customer ---
   const [custName, setCustName] = useState('');
@@ -107,6 +109,7 @@ export default function Home() {
     setInvoiceNoteText(cfg.default_invoice_note_text);
     setIsExport(cfg.default_is_export);
     setGirocodeEnabled(cfg.default_girocode_enabled);
+    setEuTextEnabled(cfg.default_eu_text_enabled);
     const cust = cfg.last_customer || {};
     setCustName(cust.name || '');
     setCustStreet(cust.street || '');
@@ -186,6 +189,7 @@ export default function Home() {
       default_create_delivery_note: deliveryNote,
       default_is_export: isExport,
       default_girocode_enabled: girocodeEnabled,
+      default_eu_text_enabled: euTextEnabled,
       default_weight: weight,
       default_delivery_note_text: deliveryNoteText,
       default_invoice_note_text: invoiceNoteText,
@@ -202,7 +206,7 @@ export default function Home() {
     if (incrementNr) {
       setInvoiceNr(`${nr + 1}/${year}`);
     }
-  }, [config, invoiceNr, markup, ustEnabled, ustPercent, deliveryNote, isExport, girocodeEnabled, weight, deliveryNoteText, invoiceNoteText, custName, custStreet, custPlz, custCountry, custVat]);
+  }, [config, invoiceNr, markup, ustEnabled, ustPercent, deliveryNote, isExport, girocodeEnabled, euTextEnabled, weight, deliveryNoteText, invoiceNoteText, custName, custStreet, custPlz, custCountry, custVat]);
 
   // ─── File Upload / Parse ──────────────────────────────
   const handleFileUpload = useCallback(async (file) => {
@@ -440,6 +444,7 @@ export default function Home() {
       ust_percent: ustPct,
       is_export: isExport,
       girocode_enabled: girocodeEnabled,
+      eu_text_enabled: euTextEnabled,
       weight: weight.trim(),
       delivery_note_text: deliveryNoteText.trim(),
       invoice_note_text: invoiceNoteText.trim(),
@@ -658,6 +663,14 @@ export default function Home() {
               <input type="checkbox" className="checkbox-input" checked={girocodeEnabled}
                 onChange={e => setGirocodeEnabled(e.target.checked)} id="chk-girocode" />
               QR-Code
+            </label>
+          </div>
+
+          <div className="checkbox-group">
+            <label className="checkbox-label" title="Steuerfreie, innergemeinschaftliche Lieferung gem. Artikel 6 UStG.">
+              <input type="checkbox" className="checkbox-input" checked={euTextEnabled}
+                onChange={e => setEuTextEnabled(e.target.checked)} id="chk-eu-text" />
+              EU-Lieferungshinweis
             </label>
           </div>
 
