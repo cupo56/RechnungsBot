@@ -88,6 +88,30 @@ def truncate_text(text, font_name, font_size, max_width):
     return (text[:lo].rstrip() + "...") if lo > 0 else "..."
 
 
+def wrap_text(text, font_name, font_size, max_width):
+    """Bricht Text in mehrere Zeilen um, sodass max_width nicht überschritten wird."""
+    words = text.split()
+    lines = []
+    current_line = []
+    
+    for word in words:
+        test_line = ' '.join(current_line + [word])
+        if pdfmetrics.stringWidth(test_line, font_name, font_size) <= max_width:
+            current_line.append(word)
+        else:
+            if current_line:
+                lines.append(' '.join(current_line))
+                current_line = [word]
+            else:
+                lines.append(word)
+                current_line = []
+                
+    if current_line:
+        lines.append(' '.join(current_line))
+        
+    return lines
+
+
 def draw_bank_footer(c):
     """Zeichnet die Bankverbindung am unteren Rand der aktuellen Seite."""
     y = MARGIN_BOTTOM - 5 * mm

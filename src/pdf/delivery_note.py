@@ -13,7 +13,7 @@ from src.config import COMPANY, FOOTER
 from src.pdf.common import (
     PAGE_W, PAGE_H, MARGIN_LEFT, MARGIN_RIGHT, MARGIN_TOP, MARGIN_BOTTOM,
     FONT_SIZE_NORMAL, FONT_SIZE_SMALL, FONT_SIZE_HEADER, FONT_SIZE_TITLE,
-    ROW_HEIGHT, register_fonts, truncate_text, draw_bank_footer,
+    ROW_HEIGHT, register_fonts, truncate_text, draw_bank_footer, wrap_text
 )
 
 # Tabellen-Spalten (X-Positionen) — lieferscheinspezifisch
@@ -68,14 +68,18 @@ class DeliveryNoteGenerator:
             else:
                 min_y = MARGIN_BOTTOM + 10 * mm
                 
-            if y - ROW_HEIGHT < min_y:
+            max_product_width = COL_QTY_R - COL_PRODUCT - 20 * mm
+            product_lines = wrap_text(item["product"], "Arial", FONT_SIZE_SMALL, max_product_width)
+            row_height = max(ROW_HEIGHT, len(product_lines) * 3.5 * mm + 2.5 * mm)
+                
+            if y - row_height < min_y:
                 self._draw_table_borders(y)
                 # Neue Seite
                 self._start_new_page()
                 y = self._draw_page_header(total_pages)
                 y = self._draw_table_header(y)
 
-            y = self._draw_item_row(y, item)
+            y = self._draw_item_row(y, item, product_lines, row_height)
 
         self._draw_table_borders(y)
 
@@ -230,13 +234,13 @@ class DeliveryNoteGenerator:
 
         return y
 
-    def _draw_item_row(self, y, item):
+    def _draw_item_row(self, y, item, product_lines, row_height):
         """Zeichnet eine Positionszeile."""
         c = self.c
 
         if self._row_counter % 2 == 1:
             c.setFillColorRGB(0.94, 0.94, 0.94)
-            c.rect(MARGIN_LEFT, y - 1.5 * mm, MARGIN_RIGHT - MARGIN_LEFT, ROW_HEIGHT, fill=1, stroke=0)
+            c.rect(MARGIN_LEFT, y + 4.5 * mm - row_height, MARGIN_RIGHT - MARGIN_LEFT, row_height, fill=1, stroke=0)
             c.setFillColorRGB(0, 0, 0)
 
         self._row_counter += 1
@@ -247,14 +251,14 @@ class DeliveryNoteGenerator:
 
         c.drawCentredString((COL_EAN + COL_PRODUCT) / 2, y, str(item["ean"]))
 
-        # Produktname kürzen wenn nötig
-        max_product_width = COL_QTY_R - COL_PRODUCT - 20 * mm
-        product_text = truncate_text(item["product"], "Arial", FONT_SIZE_SMALL, max_product_width)
-        c.drawString(COL_PRODUCT, y, product_text)
+        line_y = y
+        for line in product_lines:
+            c.drawString(COL_PRODUCT, line_y, line)
+            line_y -= 3.5 * mm
 
         c.drawRightString(COL_QTY_R - 5 * mm, y, str(quantity))
 
-        y -= ROW_HEIGHT
+        y -= row_height
         return y
 
     def _draw_summary(self, y):
@@ -278,12 +282,8 @@ class DeliveryNoteGenerator:
         return y
 
     def _draw_footer(self, y):
-        """Zeichnet Lieferbedingungen, Paletten- und Gewichtsinfos."""
+        """Zeichnet Paletten- und Gewichtsinfos."""
         c = self.c
-
-        c.setFont("Arial", FONT_SIZE_NORMAL)
-        c.drawString(MARGIN_LEFT, y, FOOTER.get("delivery_terms", "Lieferbedinungen: EXW"))
-        y -= 10 * mm
 
         custom_text = self.inv.get("delivery_note_text", "").strip()
         if custom_text:
