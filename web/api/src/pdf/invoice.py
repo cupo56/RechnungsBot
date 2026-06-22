@@ -132,9 +132,9 @@ class InvoiceGenerator:
                 h += 4.0
         if self.cust.get("vat", "").strip():
             h += 4.0
-        h += 4.0   # Abstand nach Adresse
+        h += 20.0  # Abstand nach Adresse (+16mm für 4 Absätze)
         h += 6.0   # Rechnungsnummer / Datum
-        h += 6.0   # Export-Slot (immer reserviert)
+        h += 14.0  # Export-Slot (immer reserviert, +8mm für 2 Absätze)
         # Tabellenüberschriften (_draw_table_header): 2 mm gap + 4 mm + ROW_HEIGHT
         h += 2.0 + 4.0 + 6.0
         return h * mm
@@ -212,7 +212,7 @@ class InvoiceGenerator:
             c.drawString(MARGIN_LEFT, y, f"VAT: {vat}")
             y -= 4 * mm
 
-        y -= 4 * mm
+        y -= 20 * mm # 4 Absätze extra Abstand
 
         # --- Rechnungsnummer & Datum ---
         c.setFont("Arial-Bold", FONT_SIZE_TITLE)
@@ -225,7 +225,7 @@ class InvoiceGenerator:
         if self.inv.get("is_export", False):
             c.setFont("Arial-Bold", FONT_SIZE_TITLE)
             c.drawCentredString(PAGE_W / 2, y, "EXPORT")
-        y -= 6 * mm
+        y -= 14 * mm # 2 Absätze extra Abstand
 
         footer_y = draw_bank_footer(self.c)
         if self.inv.get("girocode_enabled", True):
