@@ -424,8 +424,9 @@ class InvoiceGenerator:
             c.drawString(COL_EAN, y, FOOTER.get("delivery_terms", "Lieferbedinungen: EXW 1230 Wien, Mellergasse 4-02"))
             y -= 8 * mm
         else:
-            c.drawString(COL_EAN, y, FOOTER.get("eu_text_1", "Steuerfreie, innergemeinschaftliche Lieferung gem. Artikel 6 UStG."))
-            y -= 12 * mm
+            if self.inv.get("eu_text_enabled", True):
+                c.drawString(COL_EAN, y, FOOTER.get("eu_text_1", "Steuerfreie, innergemeinschaftliche Lieferung gem. Artikel 6 UStG."))
+                y -= 12 * mm
             c.drawString(COL_EAN, y, FOOTER.get("eu_text_2", "Leistungsdatum ist gleich dem Rechnungsdatum"))
             y -= 5 * mm
             c.drawString(COL_EAN, y, FOOTER.get("eu_text_3", "Beim Zahlungsverzug sind sämtliche Mahn.-und Inkassospesen zu ersetzen.Gerichtsstand ist Wien."))
