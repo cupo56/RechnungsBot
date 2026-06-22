@@ -80,11 +80,11 @@ export default function Home() {
 
   // --- State: Items & File ---
   const [items, setItems] = useState([]);
-  const [loadedFile, setLoadedFile] = useState(null);
+  const [loadedFiles, setLoadedFiles] = useState([]); // [{ id, name, count, status: 'ok'|'error', error? }]
   const [dragOver, setDragOver] = useState(false);
 
   // --- State: UI ---
-  const [status, setStatus] = useState({ text: 'Bereit — Excel-Datei laden um zu beginnen.', type: 'idle' });
+  const [status, setStatus] = useState({ text: 'Bereit — Excel- oder PDF-Datei(en) laden um zu beginnen.', type: 'idle' });
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [toast, setToast] = useState(null);
@@ -209,41 +209,69 @@ export default function Home() {
   }, [config, invoiceNr, markup, ustEnabled, ustPercent, deliveryNote, isExport, girocodeEnabled, euTextEnabled, weight, deliveryNoteText, invoiceNoteText, custName, custStreet, custPlz, custCountry, custVat]);
 
   // ─── File Upload / Parse ──────────────────────────────
-  const handleFileUpload = useCallback(async (file) => {
-    if (!file) return;
-    const ext = file.name.toLowerCase();
-    if (!ext.endsWith('.xlsx') && !ext.endsWith('.xls') && !ext.endsWith('.pdf')) {
-      setStatus({ text: 'Bitte eine Excel- (.xlsx) oder PDF-Datei laden.', type: 'error' });
-      return;
+  const parseOneFile = useCallback(async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const resp = await fetch('/api/parse', { method: 'POST', body: formData });
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+      const uploadErr = new Error(errData.error || `Fehler ${resp.status}`);
+      uploadErr.detail = errData.detail;
+      throw uploadErr;
     }
+    const data = await resp.json();
+    return data.items || [];
+  }, []);
+
+  const handleFilesUpload = useCallback(async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+
+    const valid = [];
+    for (const file of files) {
+      const name = file.name.toLowerCase();
+      if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.pdf')) {
+        valid.push(file);
+      } else {
+        setToast({ text: `❌ ${file.name}: nicht unterstütztes Format`, type: 'error' });
+      }
+    }
+    if (!valid.length) return;
 
     setLoading(true);
-    setStatus({ text: `${file.name} wird eingelesen…`, type: 'loading' });
+    let okCount = 0;
+    let errCount = 0;
+    let addedItemCount = 0;
 
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
+    for (let i = 0; i < valid.length; i++) {
+      const file = valid[i];
+      setStatus({ text: `Datei ${i + 1} von ${valid.length} wird eingelesen… (${file.name})`, type: 'loading' });
 
-      const resp = await fetch('/api/parse', { method: 'POST', body: formData });
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-        const uploadErr = new Error(errData.error || `Fehler ${resp.status}`);
-        uploadErr.detail = errData.detail;
-        throw uploadErr;
+      const fileId = crypto.randomUUID();
+      try {
+        const parsed = await parseOneFile(file);
+        const tagged = parsed.map(it => ({ ...it, _fileId: fileId }));
+        setItems(prev => [...prev, ...tagged]);
+        setLoadedFiles(prev => [...prev, { id: fileId, name: file.name, count: tagged.length, status: 'ok' }]);
+        okCount += 1;
+        addedItemCount += tagged.length;
+      } catch (err) {
+        setLoadedFiles(prev => [...prev, { id: fileId, name: file.name, count: 0, status: 'error', error: err.message }]);
+        errCount += 1;
       }
-      const data = await resp.json();
-      const parsed = data.items || [];
-      setItems(parsed);
-      setLoadedFile(file.name);
-      setStatus({ text: `${parsed.length} Positionen aus '${file.name}' geladen.`, type: 'success' });
-      setToast({ text: `✅ ${parsed.length} Positionen geladen`, type: 'success' });
-    } catch (err) {
-      setStatus({ text: `Fehler: ${err.message}`, type: 'error', detail: err.detail });
-      setToast({ text: `❌ ${err.message}`, type: 'error' });
-    } finally {
-      setLoading(false);
     }
-  }, []);
+
+    setLoading(false);
+    if (errCount === 0) {
+      setStatus({ text: `${addedItemCount} Positionen aus ${okCount} Datei(en) geladen.`, type: 'success' });
+      setToast({ text: `✅ ${okCount} Datei(en) geladen (${addedItemCount} Positionen)`, type: 'success' });
+    } else {
+      const allFailed = okCount === 0;
+      setStatus({ text: `${okCount} von ${valid.length} Dateien geladen — ${errCount} fehlgeschlagen.`, type: allFailed ? 'error' : 'success' });
+      setToast({ text: `⚠️ ${okCount} von ${valid.length} Dateien geladen — ${errCount} fehlgeschlagen`, type: 'error' });
+    }
+  }, [parseOneFile]);
 
   // ─── Drag & Drop ──────────────────────────────────────
   const onDragOver = (e) => { e.preventDefault(); setDragOver(true); };
@@ -251,22 +279,26 @@ export default function Home() {
   const onDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer?.files?.[0];
-    if (file) handleFileUpload(file);
+    if (e.dataTransfer?.files?.length) handleFilesUpload(e.dataTransfer.files);
   };
   const onBrowse = () => fileInputRef.current?.click();
   const onFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) handleFileUpload(file);
+    if (e.target.files?.length) handleFilesUpload(e.target.files);
     e.target.value = '';
   };
 
   // ─── Reset Session ────────────────────────────────────
   const resetSession = () => {
     setItems([]);
-    setLoadedFile(null);
+    setLoadedFiles([]);
     setSelectAllIndiv(false);
-    setStatus({ text: 'Bereit — Excel-Datei laden um zu beginnen.', type: 'idle' });
+    setStatus({ text: 'Bereit — Excel- oder PDF-Datei(en) laden um zu beginnen.', type: 'idle' });
+  };
+
+  // ─── Remove a loaded file (and its items) ─────────────
+  const removeFile = (fileId) => {
+    setLoadedFiles(prev => prev.filter(f => f.id !== fileId));
+    setItems(prev => prev.filter(it => it._fileId !== fileId));
   };
 
   // ─── Individual Toggle ────────────────────────────────
