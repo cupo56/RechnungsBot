@@ -14,6 +14,33 @@ export default function Navigation() {
     { href: '/database', label: '🗄️ Datenbank', desc: 'Archiv & Suche' },
   ];
 
+  const handleImport = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target.result);
+        
+        // Merge with existing config
+        const existingStr = localStorage.getItem('rechnungsbot_config');
+        let existing = {};
+        try { if (existingStr) existing = JSON.parse(existingStr); } catch(err){}
+
+        const merged = { ...existing, ...json };
+        localStorage.setItem('rechnungsbot_config', JSON.stringify(merged));
+        
+        alert('Vorlagen und Einstellungen erfolgreich importiert!');
+        window.location.reload();
+      } catch (err) {
+        alert('Fehler beim Importieren der Datei: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // reset input
+  };
+
   return (
     <nav className="top-nav">
       <div className="nav-container">
@@ -35,6 +62,20 @@ export default function Navigation() {
               </Link>
             );
           })}
+          
+          <label 
+            className="nav-link" 
+            style={{ cursor: 'pointer' }}
+            title="Einstellungen & Vorlagen importieren (.json)"
+          >
+            ⚙️ Import
+            <input 
+              type="file" 
+              accept=".json" 
+              style={{ display: 'none' }} 
+              onChange={handleImport} 
+            />
+          </label>
         </div>
       </div>
     </nav>
