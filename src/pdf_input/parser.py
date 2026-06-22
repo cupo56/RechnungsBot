@@ -36,11 +36,11 @@ _RE_CT_LINE = re.compile(r'^CT:\s*\d+\s*$')
 # "DKNY 24/7 Edp Spray 50 ml UG 48 12,80 614,40"
 # Gruppen: Beschreibung, Menge, Einzelpreis (Gesamtpreis wird verworfen)
 _RE_FCT_LINE = re.compile(
-    r'^(.+?)\s+[A-Z]{1,4}\s+(\d+)\s+([\d.,]+)\s+[\d.,]+\s*$'
+    r'^(.+?)\s+(?:[a-zA-Z]{1,8}\s+)?(\d+(?:[,.]\d+)?)\s+(?:€\s*)?([\d.,]+)\s+(?:€\s*)?[\d.,]+.*$'
 )
 
 # FCT-Format EAN-Zeile (eigene Zeile nach der Artikelzeile, ggf. nach Umbruchzeilen)
-_RE_FCT_EAN = re.compile(r'^\d{12,14}$')
+_RE_FCT_EAN = re.compile(r'^\d{8,14}$')
 
 # PWV-Format (Parfumeriewarenvertriebs GmbH) Artikelzeile:
 # "1 056L2850301 La Vie est Belle EdP Vapo 30ml 7 STK 32,07 224,49"
@@ -288,7 +288,8 @@ def _parse_fct(filepath: str) -> list[dict]:
             continue
 
         desc_parts = [m.group(1).strip()]
-        qty        = int(m.group(2))
+        qty_str = m.group(2)
+        qty = int(float(qty_str.replace(',', '.')))
         unit_price = _cell_float(m.group(3))
         i += 1
 
