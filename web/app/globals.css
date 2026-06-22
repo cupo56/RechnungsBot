@@ -331,6 +331,64 @@ body {
   display: none;
 }
 
+/* ── Loaded Files List ────────────────────────────────── */
+.loaded-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: -8px;
+  margin-bottom: 24px;
+}
+
+.loaded-file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  font-size: 0.85rem;
+}
+
+.loaded-file-row.error {
+  border-color: var(--danger-500);
+  background: var(--danger-50);
+}
+
+.loaded-file-name {
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loaded-file-count {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.loaded-file-row.error .loaded-file-count {
+  color: var(--danger-600);
+}
+
+.loaded-file-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 2px 4px;
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+}
+
+.loaded-file-remove:hover {
+  background: var(--gray-100);
+}
+
 /* ── Cards / Panels ────────────────────────────────────── */
 .panels-row {
   display: grid;
