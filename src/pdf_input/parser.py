@@ -388,6 +388,12 @@ def _parse_znz(filepath: str) -> list[dict]:
     "Unit Price" und endet bei "Invoice total" – nur in diesem Bereich wird
     nach Artikel-/Datenzeilen gesucht, um Fließtext aus Adress- und
     Kopfblöcken nicht versehentlich als Position zu erkennen.
+
+    Liegt die Artikelzeile am Seitenende, folgen vor der zugehörigen
+    Datenzeile auf der nächsten Seite der Fußzeilentext ("Zpracováno
+    systémem ...") sowie der wiederholte Adress-/Tabellenkopfblock. Dieser
+    Block wird beim Suchen der Datenzeile übersprungen, sonst würde er in
+    die Produktbeschreibung übernommen.
     """
     all_lines: list[str] = []
     with pdfplumber.open(filepath) as pdf:
@@ -424,6 +430,16 @@ def _parse_znz(filepath: str) -> list[dict]:
         m_data = None
         while i < len(all_lines):
             cont = all_lines[i].strip()
+
+            if cont.startswith("Zpracováno"):
+                i += 1
+                while i < len(all_lines) and not (
+                    "Quantity" in all_lines[i] and "Unit Price" in all_lines[i]
+                ):
+                    i += 1
+                i += 1
+                continue
+
             m_data = _RE_ZNZ_DATA.match(cont)
             if m_data:
                 i += 1
