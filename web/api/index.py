@@ -25,21 +25,21 @@ def _error_response(friendly, status=500, detail=None):
 # --- PARSE ---
 @app.route('/api/parse', methods=['POST'])
 def parse_file():
-    if 'file' not in request.files:
+    payload = request.json or {}
+    filename = payload.get("filename", "")
+    file_base64 = payload.get("file_base64")
+    if not filename or not file_base64:
         return jsonify({"error": "Keine Datei hochgeladen."}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "Keine Datei ausgewählt."}), 400
 
     # Save to temp file
-    ext = os.path.splitext(file.filename)[1].lower()
+    ext = os.path.splitext(filename)[1].lower()
     fd, temp_path = tempfile.mkstemp(suffix=ext)
     os.close(fd)
-    
+
     try:
-        file.save(temp_path)
-        
+        with open(temp_path, "wb") as f:
+            f.write(base64.b64decode(file_base64))
+
         if ext == ".pdf":
             from src.pdf_input.parser import parse_pdf
             items = parse_pdf(temp_path)

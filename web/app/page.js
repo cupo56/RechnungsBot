@@ -210,10 +210,14 @@ export default function Home() {
 
   // ─── File Upload / Parse ──────────────────────────────
   const parseOneFile = useCallback(async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
+    const buffer = await file.arrayBuffer();
+    const base64 = btoa(Array.from(new Uint8Array(buffer), b => String.fromCharCode(b)).join(''));
 
-    const resp = await fetch('/api/parse', { method: 'POST', body: formData });
+    const resp = await fetch('/api/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: file.name, file_base64: base64 }),
+    });
     if (!resp.ok) {
       const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
       const uploadErr = new Error(errData.error || `Fehler ${resp.status}`);
