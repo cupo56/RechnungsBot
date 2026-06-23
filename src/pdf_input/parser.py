@@ -54,8 +54,10 @@ _RE_PWV_EAN = re.compile(r'^EAN\s+(\d{12,14})\s*$')
 
 # ZNZ-Format (ZNZ ELECTRONICS, s.r.o.) Artikelzeile:
 # "1 100130496 Armaf Club de Nuit Intense Man Perfumed Deostick 75 g (man)"
+# Die Artikelnummer steht je nach Rechnung als ein Token ("100130496") oder
+# als zwei Tokens ("100 12945") in der Zeile, daher ist das zweite Token optional.
 # Gruppen: Artikelnummer (verworfen), Beschreibung
-_RE_ZNZ_ITEM = re.compile(r'^\d+\s+\S+\s+(.+)$')
+_RE_ZNZ_ITEM = re.compile(r'^\d+\s+\d+(?:\s+\d+)?\s+(.+)$')
 
 # ZNZ-Format Datenzeile (eigene Zeile nach der Artikelzeile, ggf. nach Umbruchzeilen):
 # "4,00 ks 7,33 29,32 0 33072000 0 29,32"
