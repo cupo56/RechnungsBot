@@ -291,10 +291,11 @@ class DeliveryNoteGenerator:
                 if line.strip():
                     c.drawString(MARGIN_LEFT, y, line.strip())
                     y -= 6 * mm
-        else:
-            weight = self.inv.get("weight", "")
-            if weight:
-                c.drawString(MARGIN_LEFT, y, f"Gewicht Netto {weight}kg")
+
+        weight = self.inv.get("weight", "")
+        if weight:
+            c.drawString(MARGIN_LEFT, y, f"Gewicht Netto {weight}kg")
+            y -= 6 * mm
 
         return y
 
