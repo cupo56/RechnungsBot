@@ -59,11 +59,15 @@ _RE_ZNZ_ITEM = re.compile(r'^\d+\s+\S+\s+(.+)$')
 
 # ZNZ-Format Datenzeile (eigene Zeile nach der Artikelzeile, ggf. nach Umbruchzeilen):
 # "4,00 ks 7,33 29,32 0 33072000 0 29,32"
+# Beträge ab 1.000 werden mit Leerzeichen als Tausendertrennzeichen notiert,
+# z.B. "48,00 ks 25,80 1 238,40 0 33030090 0 1 238,40".
 # Gruppen: Menge, Einzelpreis, Zolltarifnummer (8-stellig, optional)
 # Dienstleistungspositionen (z.B. "Transport") haben keine Zolltarifnummer
 # und werden anhand der fehlenden Gruppe 3 übersprungen.
+_ZNZ_AMOUNT = r'\d{1,3}(?:[ .]\d{3})*,\d{2}'
 _RE_ZNZ_DATA = re.compile(
-    r'^(\d+),\d{2}\s+ks\s+([\d,]+)\s+[\d,]+\s+\d+\s+(?:(\d{8})\s+)?\d+\s+[\d,]+\s*$',
+    r'^(\d+),\d{2}\s+ks\s+(' + _ZNZ_AMOUNT + r')\s+' + _ZNZ_AMOUNT
+    + r'\s+\d+\s+(?:(\d{8})\s+)?\d+\s+' + _ZNZ_AMOUNT + r'\s*$',
     re.IGNORECASE,
 )
 
@@ -80,7 +84,7 @@ def _is_product_table(table: list[list]) -> bool:
 
 
 def _cell_float(value: str) -> float:
-    text = str(value).strip().replace(",", ".")
+    text = str(value).strip().replace(" ", "").replace(",", ".")
     try:
         return float(text)
     except ValueError:
@@ -442,7 +446,17 @@ def parse_pdf(filepath: str) -> list[dict]:
     """
     Liest eine Lieferanten-PDF-Datei und gibt bestellte Positionen zurück.
     Versucht zuerst die Tabellenzellen-Formate (CIPO, ALINA-Rechnung,
-    ALINA-Bestellung), dann die Fließtext-Formate (MATIVA, FCT, PWV, ZNZ).
+    ALINA-Bestellung), dann die Fließtext-Formate (MATIVA, ZNZ, FCT, PWV).
+
+    ZNZ wird vor FCT/PWV versucht, obwohl es zuletzt entdeckt wurde: FCT und
+    PWV erkennen Datenzeilen anhand generischer, nicht auf einen Tabellen-
+    bereich beschränkter Regex-Muster, die auch auf ZNZ-Datenzeilen passen
+    (z.B. "6,00 ks 15,75 94,50 0 33030010 0 94,50" wird sonst fälschlich als
+    FCT-Position mit Menge/Preis aus den falschen Spalten gelesen). ZNZ
+    grenzt seinen Suchbereich über die Tabellenkopf- ("Quantity"/"Unit
+    Price") und Endmarkierung ("Invoice total") ein und muss daher zuerst
+    geprüft werden, damit es bei ZNZ-Dateien nicht von der falsch
+    matchenden FCT-Regex überdeckt wird.
 
     Returns:
         list[dict]: Liste von Positionen mit Schlüsseln:
@@ -463,13 +477,13 @@ def parse_pdf(filepath: str) -> list[dict]:
         items = _parse_mativa(filepath)
 
     if not items:
+        items = _parse_znz(filepath)
+
+    if not items:
         items = _parse_fct(filepath)
 
     if not items:
         items = _parse_pwv(filepath)
-
-    if not items:
-        items = _parse_znz(filepath)
 
     if not items:
         raise ValueError(
