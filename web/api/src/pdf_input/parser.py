@@ -466,15 +466,18 @@ def parse_pdf(filepath: str) -> list[dict]:
     Versucht zuerst die Tabellenzellen-Formate (CIPO, ALINA-Rechnung,
     ALINA-Bestellung), dann die Fließtext-Formate (MATIVA, ZNZ, FCT, PWV).
 
-    ZNZ wird vor FCT/PWV versucht, obwohl es zuletzt entdeckt wurde: FCT und
-    PWV erkennen Datenzeilen anhand generischer, nicht auf einen Tabellen-
-    bereich beschränkter Regex-Muster, die auch auf ZNZ-Datenzeilen passen
+    ZNZ und PWV werden vor FCT versucht, obwohl FCT zuerst entdeckt wurde:
+    FCT erkennt Datenzeilen anhand eines generischen, nicht auf einen
+    Tabellenbereich beschränkten Regex-Musters, das auch auf ZNZ- und
+    PWV-Datenzeilen (bzw. auf Kopf-/Fußzeilen von PWV-Rechnungen) passt
     (z.B. "6,00 ks 15,75 94,50 0 33030010 0 94,50" wird sonst fälschlich als
-    FCT-Position mit Menge/Preis aus den falschen Spalten gelesen). ZNZ
-    grenzt seinen Suchbereich über die Tabellenkopf- ("Quantity"/"Unit
-    Price") und Endmarkierung ("Invoice total") ein und muss daher zuerst
-    geprüft werden, damit es bei ZNZ-Dateien nicht von der falsch
-    matchenden FCT-Regex überdeckt wird.
+    FCT-Position mit Menge/Preis aus den falschen Spalten gelesen; ebenso
+    "Tel.: (01) 512 04 24 Fax.: (01) 512 04 24 15" in PWV-Rechnungsköpfen).
+    ZNZ grenzt seinen Suchbereich über die Tabellenkopf- ("Quantity"/"Unit
+    Price") und Endmarkierung ("Invoice total") ein, PWV verlangt das
+    literale "STK"-Token und einen führenden Positions-/Artikelnummer-Teil –
+    beide müssen daher vor FCT geprüft werden, damit sie nicht von dessen
+    falsch matchender Regex überdeckt werden.
 
     Returns:
         list[dict]: Liste von Positionen mit Schlüsseln:
@@ -498,10 +501,10 @@ def parse_pdf(filepath: str) -> list[dict]:
         items = _parse_znz(filepath)
 
     if not items:
-        items = _parse_fct(filepath)
+        items = _parse_pwv(filepath)
 
     if not items:
-        items = _parse_pwv(filepath)
+        items = _parse_fct(filepath)
 
     if not items:
         raise ValueError(
