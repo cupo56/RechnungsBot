@@ -41,6 +41,24 @@ def parse_file():
             f.write(base64.b64decode(file_base64))
 
         if ext == ".pdf":
+            from src.pdf_input.own_invoice_parser import is_own_invoice, parse_own_invoice
+            if is_own_invoice(temp_path):
+                parsed = parse_own_invoice(temp_path)
+                items_out = [
+                    {
+                        "ean": str(it.get("ean", "")),
+                        "product": str(it.get("product", "")),
+                        "quantity": int(it.get("quantity", 0)),
+                        "source_price": float(it.get("source_price", 0.0)),
+                    }
+                    for it in parsed["items"]
+                ]
+                return jsonify({
+                    "invoice_type": "own_invoice",
+                    "items": items_out,
+                    "invoice_data": parsed["invoice_data"],
+                    "customer_data": parsed["customer_data"],
+                })
             from src.pdf_input.parser import parse_pdf
             items = parse_pdf(temp_path)
         else:

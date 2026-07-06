@@ -225,7 +225,12 @@ export default function Home() {
       throw uploadErr;
     }
     const data = await resp.json();
-    return data.items || [];
+    return {
+      items: data.items || [],
+      isOwnInvoice: data.invoice_type === 'own_invoice',
+      invoiceData: data.invoice_data || null,
+      customerData: data.customer_data || null,
+    };
   }, []);
 
   const handleFilesUpload = useCallback(async (fileList) => {
@@ -247,6 +252,7 @@ export default function Home() {
     let okCount = 0;
     let errCount = 0;
     let addedItemCount = 0;
+    let ownInvoiceNr = null;
 
     for (let i = 0; i < valid.length; i++) {
       const file = valid[i];
@@ -254,12 +260,46 @@ export default function Home() {
 
       const fileId = crypto.randomUUID();
       try {
-        const parsed = await parseOneFile(file);
-        const tagged = parsed.map(it => ({ ...it, _fileId: fileId }));
+        const result = await parseOneFile(file);
+        const tagged = result.items.map(it => {
+          const base = { ...it, _fileId: fileId };
+          if (result.isOwnInvoice) {
+            // Preise aus importierter Rechnung fixieren (Aufschlag hat keinen Effekt)
+            return {
+              ...base,
+              individual: true,
+              custom_quantity: it.quantity,
+              custom_ean: it.ean,
+              custom_product: it.product,
+              custom_unit_price: it.source_price,
+            };
+          }
+          return base;
+        });
         setItems(prev => [...prev, ...tagged]);
-        setLoadedFiles(prev => [...prev, { id: fileId, name: file.name, count: tagged.length, status: 'ok' }]);
+        setLoadedFiles(prev => [...prev, { id: fileId, name: file.name, count: tagged.length, status: 'ok', isOwnInvoice: result.isOwnInvoice }]);
         okCount += 1;
         addedItemCount += tagged.length;
+
+        // Formularfelder aus importierter Rechnung befüllen
+        if (result.isOwnInvoice && result.invoiceData) {
+          const inv = result.invoiceData;
+          const cust = result.customerData || {};
+          if (inv.number) setInvoiceNr(inv.number);
+          if (inv.date) setInvoiceDate(inv.date);
+          setMarkup('0.0');
+          setUstEnabled(inv.ust_enabled ?? false);
+          setUstPercent(String(inv.ust_percent ?? 20.0));
+          setIsExport(inv.is_export ?? false);
+          setEuTextEnabled(inv.eu_text_enabled ?? true);
+          setInvoiceNoteText(inv.invoice_note_text || '');
+          if (cust.name) setCustName(cust.name);
+          if (cust.street) setCustStreet(cust.street);
+          if (cust.plz_city) setCustPlz(cust.plz_city);
+          if (cust.country) setCustCountry(cust.country);
+          if (cust.vat) setCustVat(cust.vat);
+          ownInvoiceNr = inv.number || file.name;
+        }
       } catch (err) {
         setLoadedFiles(prev => [...prev, { id: fileId, name: file.name, count: 0, status: 'error', error: err.message }]);
         errCount += 1;
@@ -268,8 +308,13 @@ export default function Home() {
 
     setLoading(false);
     if (errCount === 0) {
-      setStatus({ text: `${addedItemCount} Positionen aus ${okCount} Datei(en) geladen.`, type: 'success' });
-      setToast({ text: `✅ ${okCount} Datei(en) geladen (${addedItemCount} Positionen)`, type: 'success' });
+      if (ownInvoiceNr) {
+        setStatus({ text: `Rechnung ${ownInvoiceNr} importiert — ${addedItemCount} Positionen geladen. Felder wurden automatisch befüllt.`, type: 'success' });
+        setToast({ text: `📄 Rechnung ${ownInvoiceNr} importiert — Felder befüllt`, type: 'success' });
+      } else {
+        setStatus({ text: `${addedItemCount} Positionen aus ${okCount} Datei(en) geladen.`, type: 'success' });
+        setToast({ text: `✅ ${okCount} Datei(en) geladen (${addedItemCount} Positionen)`, type: 'success' });
+      }
     } else {
       const allFailed = okCount === 0;
       setStatus({ text: `${okCount} von ${valid.length} Dateien geladen — ${errCount} fehlgeschlagen.`, type: allFailed ? 'error' : 'success' });
@@ -635,7 +680,7 @@ export default function Home() {
             <div key={f.id} className={`loaded-file-row ${f.status === 'error' ? 'error' : ''}`}>
               <span className="loaded-file-name">{f.name}</span>
               <span className="loaded-file-count">
-                {f.status === 'error' ? f.error : `${f.count} Positionen`}
+                {f.status === 'error' ? f.error : f.isOwnInvoice ? `📄 Importierte Rechnung · ${f.count} Positionen` : `${f.count} Positionen`}
               </span>
               <button className="loaded-file-remove" onClick={() => removeFile(f.id)} title="Datei entfernen">🗑</button>
             </div>
