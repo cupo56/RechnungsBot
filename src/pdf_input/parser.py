@@ -50,7 +50,9 @@ _RE_PWV_LINE = re.compile(
 )
 
 # PWV-Format EAN-Zeile (eigene Zeile nach der Artikelzeile, ggf. nach Umbruchzeilen)
-_RE_PWV_EAN = re.compile(r'^EAN\s+(\d{12,14})\s*$')
+# Manche Rechnungen haben kein Leerzeichen zwischen "EAN" und der Ziffernfolge
+# (z.B. "EAN3770006409936" statt "EAN 3770006409936").
+_RE_PWV_EAN = re.compile(r'^EAN\s*(\d{12,14})\s*$')
 
 # ZNZ-Format (ZNZ ELECTRONICS, s.r.o.) Artikelzeile:
 # "1 100130496 Armaf Club de Nuit Intense Man Perfumed Deostick 75 g (man)"
