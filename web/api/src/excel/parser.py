@@ -41,9 +41,13 @@ _FRAGRANCE_REPLACEMENTS = [
 ]
 
 # ─── Keyword-Sets für Spaltenköpfe ───────────────────────────────────
+# "amount" ist absichtlich NICHT enthalten: in diesem Projekt (siehe
+# ALINA-PDF-Format in src/pdf_input/parser.py) bezeichnet "Amount" die
+# Gesamtsumme einer Zeile, nicht die Bestellmenge – als Mengen-Keyword
+# würde es z.B. eine "Total Amount"-Spalte fälschlich als Menge erkennen.
 _QUANTITY_KEYWORDS = {
     "order", "quantity", "bestellung", "qty", "menge",
-    "stück", "stk", "anzahl", "amount", "pcs",
+    "stück", "stk", "anzahl", "pcs",
     "ilość", "množství",
 }
 
@@ -59,7 +63,8 @@ _PRICE_KEYWORDS = {
 }
 
 # Spalten mit diesen Keywords werden NICHT als Preis erkannt
-_PRICE_EXCLUDE = {"bulk", "120", "total", "gesamt", "brutto", "summe"}
+# ("gewicht" verhindert, dass "netto" fälschlich in "Nettogewicht" matcht)
+_PRICE_EXCLUDE = {"bulk", "120", "total", "gesamt", "brutto", "summe", "gewicht"}
 
 _EAN_KEYWORDS = {"ean", "barcode", "gtin", "upc"}
 
@@ -176,7 +181,16 @@ def _find_header(row_iterator, max_rows: int = _MAX_HEADER_SEARCH_ROW):
             elif _matches_any(cell_val, _QUANTITY_KEYWORDS) and col_map['order'] is None:
                 col_map['order'] = col_idx
 
-        return row_num, col_map
+        # Nur akzeptieren, wenn alle Pflichtspalten gefunden wurden – sonst war
+        # es ein falsches Positiv (z.B. eine Titelzeile mit "Bestellung" im
+        # Text, ohne echte Produkt-/Preis-Spalten) und wir suchen in einer
+        # der folgenden Zeilen weiter, statt das Blatt aufzugeben.
+        if (
+            col_map['product'] is not None
+            and col_map['price'] is not None
+            and col_map['order'] is not None
+        ):
+            return row_num, col_map
 
     return None, None
 
