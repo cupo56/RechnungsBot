@@ -82,8 +82,8 @@ export default function DatabasePage() {
     setApiUrl(cfg.db_api_url || '');
     setApiKey(cfg.db_api_key || '');
 
-    if (cfg.db_api_url && cfg.db_api_key) {
-      testConnectionAndLoad(cfg.db_api_url, cfg.db_api_key);
+    if (cfg.db_api_key) {
+      testConnectionAndLoad(cfg.db_api_key);
     } else {
       setStatus({ text: '⚠ Keine API konfiguriert — klicke auf ⚙ API-Einstellungen', type: 'warning' });
       setSettingsVisible(true);
@@ -92,14 +92,14 @@ export default function DatabasePage() {
   }, []);
 
   // ─── API Calls ────────────────────────────────────────
-  const callApi = async (action, data = {}, url = apiUrl, key = apiKey) => {
-    if (!url || !key) {
-      throw new Error("API-URL oder API-Key fehlt.");
+  const callApi = async (action, data = {}, key = apiKey) => {
+    if (!key) {
+      throw new Error("API-Key fehlt.");
     }
     const res = await fetch('/api/database', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_url: url, api_key: key, action, ...data }),
+      body: JSON.stringify({ api_key: key, action, ...data }),
     });
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
@@ -107,13 +107,13 @@ export default function DatabasePage() {
     return res.json();
   };
 
-  const testConnectionAndLoad = async (url = apiUrl, key = apiKey) => {
+  const testConnectionAndLoad = async (key = apiKey) => {
     setStatus({ text: '⏳ Verbindung wird getestet…', type: 'loading' });
     try {
-      const res = await callApi('test', {}, url, key);
+      const res = await callApi('test', {}, key);
       if (res.success) {
         setStatus({ text: `✅ Verbunden — ${res.message || 'OK'}`, type: 'success' });
-        loadInvoices(url, key);
+        loadInvoices(key);
       } else {
         setStatus({ text: `❌ Fehler: ${res.message}`, type: 'error' });
       }
@@ -122,14 +122,14 @@ export default function DatabasePage() {
     }
   };
 
-  const loadInvoices = async (url = apiUrl, key = apiKey) => {
+  const loadInvoices = async (key = apiKey) => {
     setLoading(true);
     try {
       const data = {};
       if (search.trim()) data.search = search.trim();
       if (docFilter !== 'alle') data.doc_type = docFilter;
       
-      const res = await callApi('list', data, url, key);
+      const res = await callApi('list', data, key);
       if (res.success) {
         setInvoices(res.invoices || []);
       } else {
@@ -182,11 +182,10 @@ export default function DatabasePage() {
   };
 
   const handleSaveSettings = async () => {
-    const url = apiUrl.trim();
     const key = apiKey.trim();
     
-    if (!url || !key) {
-      setToast({ text: '⚠️ API-URL und API-Key dürfen nicht leer sein.', type: 'error' });
+    if (!key) {
+      setToast({ text: '⚠️ API-Key darf nicht leer sein.', type: 'error' });
       return;
     }
 
@@ -194,18 +193,18 @@ export default function DatabasePage() {
     
     try {
       // Init attempt
-      const resInit = await callApi('init', {}, url, key);
+      const resInit = await callApi('init', {}, key);
       if (!resInit.success && !resInit.message?.includes('existiert bereits')) {
         setStatus({ text: `❌ Initialisierung fehlgeschlagen: ${resInit.message}`, type: 'error' });
         return;
       }
       
-      saveConfig({ db_api_url: url, db_api_key: key, db_enabled: true });
-      setConfig(prev => ({ ...prev, db_api_url: url, db_api_key: key, db_enabled: true }));
+      saveConfig({ db_api_key: key, db_enabled: true });
+      setConfig(prev => ({ ...prev, db_api_key: key, db_enabled: true }));
       setSettingsVisible(false);
       setToast({ text: '💾 Einstellungen gespeichert.', type: 'success' });
       
-      testConnectionAndLoad(url, key);
+      testConnectionAndLoad(key);
     } catch (err) {
       setStatus({ text: `❌ Verbindungsfehler: ${err.message}`, type: 'error' });
     }
@@ -248,10 +247,9 @@ export default function DatabasePage() {
         <div className="panel" style={{ marginBottom: 16 }}>
           <h2 className="panel-title">API-Einstellungen (World4You)</h2>
           
-          <div className="form-group" style={{ gridTemplateColumns: '80px 1fr' }}>
-            <label className="form-label" htmlFor="apiUrl">API-URL:</label>
-            <input id="apiUrl" className="form-input" value={apiUrl}
-              onChange={e => setApiUrl(e.target.value)} placeholder="z.B. https://deinedomain.at/rechnungsbot" />
+          <div style={{ backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#1E40AF' }}>
+            ℹ️ Die <strong>API-URL</strong> wird aus der serverseitigen Umgebungsvariable <code>DB_API_URL</code> gelesen
+            (Vercel Environment Variables oder <code>.env.local</code>).
           </div>
 
           <div className="form-group" style={{ gridTemplateColumns: '80px 1fr' }}>

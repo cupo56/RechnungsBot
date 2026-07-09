@@ -12,12 +12,11 @@ export async function saveInvoiceToDb({
   pdfBase64,
   pdfFilename
 }) {
-  if (!config?.db_enabled || !config?.db_api_url || !config?.db_api_key) {
+  if (!config?.db_enabled || !config?.db_api_key) {
     return; // DB nicht konfiguriert
   }
 
   const payload = {
-    api_url: config.db_api_url,
     api_key: config.db_api_key,
     action: 'save',
     
