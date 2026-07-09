@@ -1,12 +1,18 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { saveInvoiceToDb } from '../utils/db';
-import { apiHeaders } from '../utils/apiAuth';
+import { useState, useCallback, useEffect } from 'react';
+import { loadConfig as loadConfigBase, saveConfig } from '../utils/config';
+import { todayStr } from '../utils/format';
+import { useToast } from '../utils/useToast';
+import { useCustomerTemplates } from '../utils/useCustomerTemplates';
+import { useSimpleItemsEditor } from '../utils/useSimpleItemsEditor';
+import { submitDocument } from '../utils/submitDocument';
+import Toast from '../components/Toast';
+import TemplateSelector from '../components/TemplateSelector';
+import StatusBar from '../components/StatusBar';
+import SimpleItemsPanel from '../components/SimpleItemsPanel';
 
 // ─── Constants ───────────────────────────────────────────
-const CONFIG_KEY = 'rechnungsbot_config';
-
 const DEFAULT_CONFIG = {
   last_provision_number: 1,
   last_provision_year: 2026,
@@ -17,35 +23,7 @@ const DEFAULT_CONFIG = {
   provision_customer_templates: {},
 };
 
-// ─── Helpers ─────────────────────────────────────────────
-function loadConfig() {
-  try {
-    const stored = localStorage.getItem(CONFIG_KEY);
-    if (stored) {
-      return { ...DEFAULT_CONFIG, ...JSON.parse(stored) };
-    }
-  } catch { /* ignore */ }
-  return { ...DEFAULT_CONFIG };
-}
-
-function saveConfig(cfg) {
-  try {
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
-  } catch { /* ignore */ }
-}
-
-function formatCurrency(val) {
-  return val.toLocaleString('de-AT', { style: 'currency', currency: 'EUR' });
-}
-
-function formatNumber(val) {
-  return val.toLocaleString('de-AT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function todayStr() {
-  const d = new Date();
-  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
-}
+const loadConfig = () => loadConfigBase(DEFAULT_CONFIG);
 
 // ─── Main Page Component ─────────────────────────────────
 export default function ProvisionPage() {
@@ -63,24 +41,14 @@ export default function ProvisionPage() {
   const [custPlz, setCustPlz] = useState('');
   const [custCountry, setCustCountry] = useState('');
   const [custVat, setCustVat] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState('');
 
   // --- State: Items ---
   const [items, setItems] = useState([]);
-  
-  // --- State: Item Input ---
-  const [itemRef, setItemRef] = useState('');
-  const [itemDescr, setItemDescr] = useState('');
-  const [itemNetto, setItemNetto] = useState('');
 
   // --- State: UI ---
   const [status, setStatus] = useState({ text: '', type: 'idle' });
   const [generating, setGenerating] = useState(false);
-  const [toast, setToast] = useState(null);
-  const [editCell, setEditCell] = useState(null); // { rowIdx, field }
-  const [editValue, setEditValue] = useState('');
-
-  const editInputRef = useRef(null);
+  const [toast, setToast] = useToast();
 
   // ─── Load config from localStorage on mount ───────────
   useEffect(() => {
@@ -99,22 +67,6 @@ export default function ProvisionPage() {
     setCustCountry(cust.country || '');
     setCustVat(cust.vat || '');
   }, []);
-
-  // ─── Focus edit input when cell editing starts ────────
-  useEffect(() => {
-    if (editCell && editInputRef.current) {
-      editInputRef.current.focus();
-      editInputRef.current.select();
-    }
-  }, [editCell]);
-
-  // ─── Auto-hide toast ──────────────────────────────────
-  useEffect(() => {
-    if (toast) {
-      const t = setTimeout(() => setToast(null), 4000);
-      return () => clearTimeout(t);
-    }
-  }, [toast]);
 
   // ─── Computed totals ──────────────────────────────────
   const totalNetto = items.reduce((sum, it) => sum + it.net_amount, 0);
@@ -159,123 +111,33 @@ export default function ProvisionPage() {
     setStatus({ text: '', type: 'idle' });
   };
 
-  // ─── Add Item ─────────────────────────────────────────
-  const addItem = () => {
-    let ref = itemRef.trim();
-    if (ref && !ref.toLowerCase().startsWith('rechn')) {
-      ref = `Rechn.Nr.${ref}`;
-    }
-    const descr = itemDescr.trim();
-    const nettoText = itemNetto.trim().replace(',', '.');
-
-    if (!descr) {
-      setToast({ text: '⚠️ Bitte eine Beschreibung eingeben.', type: 'error' });
-      return;
-    }
-    
-    const netto = parseFloat(nettoText);
-    if (isNaN(netto) || netto <= 0) {
-      setToast({ text: '⚠️ Bitte einen gültigen Netto-Betrag eingeben (>0).', type: 'error' });
-      return;
-    }
-
-    setItems(prev => [...prev, { reference: ref, description: descr, net_amount: netto }]);
-    setItemRef('');
-    setItemDescr('');
-    setItemNetto('');
-  };
-
-  // ─── Delete Item ──────────────────────────────────────
-  const deleteItem = (idx) => {
-    const descr = items[idx]?.description || '';
-    if (confirm(`Soll die Position „${descr}“ wirklich entfernt werden?`)) {
-      setItems(prev => prev.filter((_, i) => i !== idx));
-    }
-  };
-
-  // ─── Cell Editing ─────────────────────────────────────
-  const EDITABLE_FIELDS = {
-    reference: { key: 'reference', type: 'str' },
-    description: { key: 'description', type: 'str' },
-    netto: { key: 'net_amount', type: 'float' },
-  };
-
-  const startEdit = (rowIdx, field) => {
-    const item = items[rowIdx];
-    const { key, type } = EDITABLE_FIELDS[field];
-    let val = item[key];
-    if (type === 'float') val = formatNumber(val);
-    else val = String(val);
-    setEditCell({ rowIdx, field });
-    setEditValue(val);
-  };
-
-  const commitEdit = () => {
-    if (!editCell) return;
-    const { rowIdx, field } = editCell;
-    const { key, type } = EDITABLE_FIELDS[field];
-    let raw = editValue.trim();
-
-    setItems(prev => prev.map((it, i) => {
-      if (i !== rowIdx) return it;
-      const updated = { ...it };
-      if (type === 'float') {
-        const v = parseFloat(raw.replace(',', '.'));
-        if (isNaN(v) || v <= 0) return it;
-        updated[key] = v;
-      } else {
-        if (key === 'description' && !raw) return it;
-        if (key === 'reference' && raw && !raw.toLowerCase().startsWith('rechn')) {
-          raw = `Rechn.Nr.${raw}`;
-        }
-        updated[key] = raw;
-      }
-      return updated;
-    }));
-    setEditCell(null);
-  };
-
-  const cancelEdit = () => setEditCell(null);
+  // ─── Item Editing (entry box + inline cell editing) ───
+  const itemsEditor = useSimpleItemsEditor({
+    items,
+    setItems,
+    setToast,
+    refKeyword: 'rechn',
+    refPrefix: (raw) => `Rechn.Nr.${raw}`,
+    getItemLabel: (item) => item?.description || '',
+  });
 
   // ─── Template Management ──────────────────────────────
-  const templates = config.provision_customer_templates || {};
-  const templateNames = Object.keys(templates);
-
-  const onTemplateSelect = (name) => {
-    setSelectedTemplate(name);
-    const tpl = templates[name] || {};
-    setCustName(tpl.name || '');
-    setCustStreet(tpl.street || '');
-    setCustPlz(tpl.plz_city || '');
-    setCustCountry(tpl.country || '');
-    setCustVat(tpl.vat || '');
-  };
-
-  const saveTemplate = () => {
-    const name = prompt('Name für diese Vorlage:', custName.trim());
-    if (!name?.trim()) return;
-    const newTemplates = {
-      ...templates,
-      [name.trim()]: { name: custName, street: custStreet, plz_city: custPlz, country: custCountry, vat: custVat },
-    };
-    const newCfg = { ...config, provision_customer_templates: newTemplates };
-    setConfig(newCfg);
-    saveConfig(newCfg);
-    setSelectedTemplate(name.trim());
-    setToast({ text: `💾 Vorlage '${name.trim()}' gespeichert`, type: 'success' });
-  };
-
-  const deleteTemplate = () => {
-    if (!selectedTemplate) return;
-    if (!confirm(`Vorlage '${selectedTemplate}' wirklich löschen?`)) return;
-    const newTemplates = { ...templates };
-    delete newTemplates[selectedTemplate];
-    const newCfg = { ...config, provision_customer_templates: newTemplates };
-    setConfig(newCfg);
-    saveConfig(newCfg);
-    setSelectedTemplate('');
-    setToast({ text: `🗑 Vorlage gelöscht`, type: 'success' });
-  };
+  const {
+    templateNames, selectedTemplate, onTemplateSelect, saveTemplate, deleteTemplate,
+  } = useCustomerTemplates({
+    config,
+    setConfig,
+    templatesKey: 'provision_customer_templates',
+    getFields: () => ({ name: custName, street: custStreet, plz_city: custPlz, country: custCountry, vat: custVat }),
+    applyTemplate: (tpl) => {
+      setCustName(tpl.name || '');
+      setCustStreet(tpl.street || '');
+      setCustPlz(tpl.plz_city || '');
+      setCustCountry(tpl.country || '');
+      setCustVat(tpl.vat || '');
+    },
+    setToast,
+  });
 
   // ─── Generate Invoice ─────────────────────────────────
   const generateInvoice = async () => {
@@ -316,43 +178,17 @@ export default function ProvisionPage() {
     setStatus({ text: 'Provisionsrechnung wird erstellt…', type: 'loading' });
 
     try {
-      const resp = await fetch('/api/provision', {
-        method: 'POST',
-        headers: apiHeaders(),
-        body: JSON.stringify({
-          items,
-          invoice_data: invoiceData,
-          customer_data: customerData,
-        }),
+      await submitDocument({
+        endpoint: '/api/provision',
+        items,
+        invoiceData,
+        customerData,
+        docType: 'provision',
+        defaultFilenamePrefix: 'Provisionsrechnung',
+        invoiceNr,
+        config,
+        totals: { netto: totalNetto, brutto: totalBrutto },
       });
-
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-        const genErr = new Error(errData.error || `Fehler ${resp.status}`);
-        genErr.detail = errData.detail;
-        throw genErr;
-      }
-
-      const data = await resp.json();
-
-      if (data.pdf) {
-        const link = document.createElement('a');
-        link.href = `data:application/pdf;base64,${data.pdf}`;
-        link.download = data.filename || `Provisionsrechnung_${invoiceNr.replace('/', '_')}.pdf`;
-        link.click();
-        
-        // ── Background DB Upload ──
-        saveInvoiceToDb({
-          config,
-          invoiceData,
-          customerData,
-          totals: { netto: totalNetto, brutto: totalBrutto },
-          itemCount: items.length,
-          docType: 'provision',
-          pdfBase64: data.pdf,
-          pdfFilename: link.download
-        });
-      }
 
       setStatus({ text: `✅ Provisionsrechnung erstellt!`, type: 'success' });
       setToast({ text: `✅ Provisionsrechnung erstellt!`, type: 'success' });
@@ -432,16 +268,13 @@ export default function ProvisionPage() {
             <span className="panel-title-icon">👤</span> Empfänger
           </h2>
 
-          <div className="template-row">
-            <label>Vorlage:</label>
-            <select className="template-select" value={selectedTemplate}
-              onChange={e => onTemplateSelect(e.target.value)} id="template-select">
-              <option value="">— Vorlage wählen —</option>
-              {templateNames.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-            <button className="btn btn-secondary btn-sm" onClick={saveTemplate} title="Speichern">💾</button>
-            <button className="btn btn-icon btn-sm" onClick={deleteTemplate} title="Löschen">🗑</button>
-          </div>
+          <TemplateSelector
+            templateNames={templateNames}
+            selectedTemplate={selectedTemplate}
+            onSelect={onTemplateSelect}
+            onSave={saveTemplate}
+            onDelete={deleteTemplate}
+          />
 
           <div className="form-group">
             <label className="form-label" htmlFor="custName">Firma:</label>
@@ -476,127 +309,15 @@ export default function ProvisionPage() {
       </div>
 
       {/* ── Add Item & Positions Table ── */}
-      <div className="panels-row">
-        {/* Entry Box */}
-        <div className="panel" style={{ height: 'fit-content' }}>
-          <h2 className="panel-title">
-            <span className="panel-title-icon">➕</span> Position hinzufügen
-          </h2>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="itemRef">Referenz (Rechnungsnr.):</label>
-            <input id="itemRef" className="form-input" value={itemRef}
-              onChange={e => setItemRef(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addItem()} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="itemDescr">Beschreibung:</label>
-            <input id="itemDescr" className="form-input" value={itemDescr}
-              onChange={e => setItemDescr(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addItem()} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="itemNetto">Netto-Betrag (€):</label>
-            <input id="itemNetto" className="form-input form-input-sm" value={itemNetto}
-              onChange={e => setItemNetto(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addItem()} />
-          </div>
-
-          <button className="btn btn-primary" onClick={addItem} style={{ width: '100%', marginTop: 12, justifyContent: 'center' }}>
-            Position hinzufügen
-          </button>
-        </div>
-
-        {/* Table Area */}
-        <div className="table-section" style={{ marginBottom: 0 }}>
-          <div className="table-toolbar">
-            <span className="table-toolbar-hint">
-              Klick auf Referenz, Beschreibung oder Netto, um die Position zu bearbeiten.
-            </span>
-          </div>
-
-          <div className="table-wrapper" style={{ maxHeight: '350px' }}>
-            {items.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-state-icon">📋</div>
-                <p className="empty-state-text">Noch keine Positionen erfasst.</p>
-              </div>
-            ) : (
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 140 }}>Referenz</th>
-                    <th>Beschreibung</th>
-                    <th className="text-right" style={{ width: 100 }}>Netto</th>
-                    <th className="text-right" style={{ width: 100 }}>Brutto</th>
-                    <th className="text-center" style={{ width: 44 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, idx) => {
-                    const isEditing = (field) => editCell?.rowIdx === idx && editCell?.field === field;
-                    const netto = item.net_amount;
-                    const brutto = netto * (1 + ustPct / 100);
-
-                    return (
-                      <tr key={idx}>
-                        <td className="editable" onClick={() => startEdit(idx, 'reference')}>
-                          {isEditing('reference') ? (
-                            <input ref={editInputRef} className="cell-edit-input" value={editValue}
-                              onChange={e => setEditValue(e.target.value)}
-                              onBlur={commitEdit}
-                              onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }} />
-                          ) : item.reference}
-                        </td>
-                        <td className="editable" onClick={() => startEdit(idx, 'description')}>
-                          {isEditing('description') ? (
-                            <input ref={editInputRef} className="cell-edit-input" value={editValue}
-                              onChange={e => setEditValue(e.target.value)}
-                              onBlur={commitEdit}
-                              onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }} />
-                          ) : item.description}
-                        </td>
-                        <td className="text-right editable" onClick={() => startEdit(idx, 'netto')}>
-                          {isEditing('netto') ? (
-                            <input ref={editInputRef} className="cell-edit-input" value={editValue}
-                              onChange={e => setEditValue(e.target.value)}
-                              onBlur={commitEdit}
-                              onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }}
-                              style={{ textAlign: 'right' }} />
-                          ) : `€ ${formatNumber(netto)}`}
-                        </td>
-                        <td className="text-right">{`€ ${formatNumber(brutto)}`}</td>
-                        <td className="text-center">
-                          <button className="table-delete-btn" onClick={() => deleteItem(idx)} title="Position entfernen">🗑</button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {items.length > 0 && (
-            <div className="table-footer">
-              <span className="text-muted">{items.length} Positionen</span>
-              <div className="table-total">
-                {ustEnabled ? (
-                  <>
-                    Netto: {formatCurrency(totalNetto)} &nbsp;·&nbsp;
-                    USt. {ustPct}%: {formatCurrency(totalUst)} &nbsp;·&nbsp;
-                    <strong>Brutto: {formatCurrency(totalBrutto)}</strong>
-                  </>
-                ) : (
-                  <>Gesamtsumme Netto: {formatCurrency(totalNetto)}</>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      <SimpleItemsPanel
+        items={items}
+        {...itemsEditor}
+        ustEnabled={ustEnabled}
+        ustPct={ustPct}
+        totalNetto={totalNetto}
+        totalUst={totalUst}
+        totalBrutto={totalBrutto}
+      />
 
       {/* ── Action Bar ── */}
       <div className="action-bar" style={{ marginTop: 24 }}>
@@ -610,23 +331,10 @@ export default function ProvisionPage() {
       </div>
 
       {/* ── Status Bar ── */}
-      {status.text && (
-        <div className="status-bar" style={{ marginTop: 24 }}>
-          <div className={`status-dot ${status.type === 'error' ? 'error' : status.type === 'loading' ? 'loading' : 'success'}`}></div>
-          <span className="status-text">{status.text}</span>
-          {status.detail && (
-            <span className="status-detail">Technisch: {status.detail}</span>
-          )}
-        </div>
-      )}
+      <StatusBar status={status} neutralDotClass="success" style={{ marginTop: 24 }} />
 
       {/* ── Toast ── */}
-      {toast && (
-        <div className={`toast ${toast.type === 'error' ? 'toast-error' : 'toast-success'}`}
-          onClick={() => setToast(null)}>
-          {toast.text}
-        </div>
-      )}
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }

@@ -3,10 +3,15 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { saveInvoiceToDb } from './utils/db';
 import { apiHeaders } from './utils/apiAuth';
+import { loadConfig as loadConfigBase, saveConfig } from './utils/config';
+import { formatCurrency, formatNumber, todayStr } from './utils/format';
+import { useToast } from './utils/useToast';
+import { useCustomerTemplates } from './utils/useCustomerTemplates';
+import Toast from './components/Toast';
+import TemplateSelector from './components/TemplateSelector';
+import StatusBar from './components/StatusBar';
 
 // ─── Constants ───────────────────────────────────────────
-const CONFIG_KEY = 'rechnungsbot_config';
-
 const DEFAULT_CONFIG = {
   last_invoice_number: 1,
   last_invoice_year: 2026,
@@ -24,35 +29,7 @@ const DEFAULT_CONFIG = {
   customer_templates: {},
 };
 
-// ─── Helpers ─────────────────────────────────────────────
-function loadConfig() {
-  try {
-    const stored = localStorage.getItem(CONFIG_KEY);
-    if (stored) {
-      return { ...DEFAULT_CONFIG, ...JSON.parse(stored) };
-    }
-  } catch { /* ignore */ }
-  return { ...DEFAULT_CONFIG };
-}
-
-function saveConfig(cfg) {
-  try {
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
-  } catch { /* ignore */ }
-}
-
-function formatCurrency(val) {
-  return val.toLocaleString('de-AT', { style: 'currency', currency: 'EUR' });
-}
-
-function formatNumber(val) {
-  return val.toLocaleString('de-AT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function todayStr() {
-  const d = new Date();
-  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
-}
+const loadConfig = () => loadConfigBase(DEFAULT_CONFIG);
 
 // ─── Main Page Component ─────────────────────────────────
 export default function Home() {
@@ -77,7 +54,6 @@ export default function Home() {
   const [custPlz, setCustPlz] = useState('');
   const [custCountry, setCustCountry] = useState('');
   const [custVat, setCustVat] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState('');
 
   // --- State: Items & File ---
   const [items, setItems] = useState([]);
@@ -88,7 +64,7 @@ export default function Home() {
   const [status, setStatus] = useState({ text: 'Bereit — Excel- oder PDF-Datei(en) laden um zu beginnen.', type: 'idle' });
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [toast, setToast] = useState(null);
+  const [toast, setToast] = useToast();
   const [editCell, setEditCell] = useState(null); // { rowIdx, field }
   const [editValue, setEditValue] = useState('');
   const [selectAllIndiv, setSelectAllIndiv] = useState(false);
@@ -127,14 +103,6 @@ export default function Home() {
       editInputRef.current.select();
     }
   }, [editCell]);
-
-  // ─── Auto-hide toast ──────────────────────────────────
-  useEffect(() => {
-    if (toast) {
-      const t = setTimeout(() => setToast(null), 4000);
-      return () => clearTimeout(t);
-    }
-  }, [toast]);
 
   // ─── Markup factor ────────────────────────────────────
   const getMarkupFactor = useCallback(() => {
@@ -341,7 +309,7 @@ export default function Home() {
       setStatus({ text: `${okCount} von ${valid.length} Dateien geladen — ${errCount} fehlgeschlagen.`, type: allFailed ? 'error' : 'success' });
       setToast({ text: `⚠️ ${okCount} von ${valid.length} Dateien geladen — ${errCount} fehlgeschlagen`, type: 'error' });
     }
-  }, [parseOneFile]);
+  }, [parseOneFile, setToast]);
 
   // ─── Drag & Drop ──────────────────────────────────────
   const onDragOver = (e) => { e.preventDefault(); setDragOver(true); };
@@ -475,44 +443,22 @@ export default function Home() {
   const cancelEdit = () => setEditCell(null);
 
   // ─── Template Management ──────────────────────────────
-  const templates = config.customer_templates || {};
-  const templateNames = Object.keys(templates);
-
-  const onTemplateSelect = (name) => {
-    setSelectedTemplate(name);
-    const tpl = templates[name] || {};
-    setCustName(tpl.name || '');
-    setCustStreet(tpl.street || '');
-    setCustPlz(tpl.plz_city || '');
-    setCustCountry(tpl.country || '');
-    setCustVat(tpl.vat || '');
-  };
-
-  const saveTemplate = () => {
-    const name = prompt('Name für diese Vorlage:', custName.trim());
-    if (!name?.trim()) return;
-    const newTemplates = {
-      ...templates,
-      [name.trim()]: { name: custName, street: custStreet, plz_city: custPlz, country: custCountry, vat: custVat },
-    };
-    const newCfg = { ...config, customer_templates: newTemplates };
-    setConfig(newCfg);
-    saveConfig(newCfg);
-    setSelectedTemplate(name.trim());
-    setToast({ text: `💾 Vorlage '${name.trim()}' gespeichert`, type: 'success' });
-  };
-
-  const deleteTemplate = () => {
-    if (!selectedTemplate) return;
-    if (!confirm(`Vorlage '${selectedTemplate}' wirklich löschen?`)) return;
-    const newTemplates = { ...templates };
-    delete newTemplates[selectedTemplate];
-    const newCfg = { ...config, customer_templates: newTemplates };
-    setConfig(newCfg);
-    saveConfig(newCfg);
-    setSelectedTemplate('');
-    setToast({ text: `🗑 Vorlage gelöscht`, type: 'success' });
-  };
+  const {
+    templateNames, selectedTemplate, onTemplateSelect, saveTemplate, deleteTemplate,
+  } = useCustomerTemplates({
+    config,
+    setConfig,
+    templatesKey: 'customer_templates',
+    getFields: () => ({ name: custName, street: custStreet, plz_city: custPlz, country: custCountry, vat: custVat }),
+    applyTemplate: (tpl) => {
+      setCustName(tpl.name || '');
+      setCustStreet(tpl.street || '');
+      setCustPlz(tpl.plz_city || '');
+      setCustCountry(tpl.country || '');
+      setCustVat(tpl.vat || '');
+    },
+    setToast,
+  });
 
   // ─── Generate Invoice ─────────────────────────────────
   const generateInvoice = async (mode = 'invoice') => {
@@ -817,16 +763,13 @@ export default function Home() {
             <span className="panel-title-icon">👤</span> Kundenadresse
           </h2>
 
-          <div className="template-row">
-            <label>Vorlage:</label>
-            <select className="template-select" value={selectedTemplate}
-              onChange={e => onTemplateSelect(e.target.value)} id="template-select">
-              <option value="">— Vorlage wählen —</option>
-              {templateNames.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-            <button className="btn btn-secondary btn-sm" onClick={saveTemplate} title="Speichern">💾</button>
-            <button className="btn btn-icon btn-sm" onClick={deleteTemplate} title="Löschen">🗑</button>
-          </div>
+          <TemplateSelector
+            templateNames={templateNames}
+            selectedTemplate={selectedTemplate}
+            onSelect={onTemplateSelect}
+            onSave={saveTemplate}
+            onDelete={deleteTemplate}
+          />
 
           <div className="form-group">
             <label className="form-label" htmlFor="custName">Firma:</label>
@@ -1024,26 +967,10 @@ export default function Home() {
       </div>
 
       {/* ── Status Bar ── */}
-      <div className="status-bar" id="status-bar">
-        <div className={`status-dot ${status.type === 'error' ? 'error' : status.type === 'loading' ? 'loading' : ''}`}></div>
-        <span className="status-text">{status.text}</span>
-        {status.detail && (
-          <span className="status-detail">Technisch: {status.detail}</span>
-        )}
-        {loading && (
-          <div className="progress-bar-container">
-            <div className="progress-bar-fill"></div>
-          </div>
-        )}
-      </div>
+      <StatusBar status={status} loading={loading} showProgress alwaysVisible />
 
       {/* ── Toast ── */}
-      {toast && (
-        <div className={`toast ${toast.type === 'error' ? 'toast-error' : 'toast-success'}`}
-          onClick={() => setToast(null)}>
-          {toast.text}
-        </div>
-      )}
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }
