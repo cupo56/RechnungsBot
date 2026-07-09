@@ -1055,3 +1055,30 @@ body {
     font-size: 0.85rem;
   }
 }
+
+/* ── Parse Warning & Raw Data ────────────────────────────── */
+.row-warning {
+  background-color: #fff8e1; /* Light yellow */
+}
+
+.row-warning:hover {
+  background-color: #ffecb3;
+}
+
+.warning-icon {
+  margin-left: 4px;
+  cursor: help;
+  font-size: 0.9em;
+}
+
+.original-data {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}

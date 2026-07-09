@@ -92,6 +92,7 @@ export default function Home() {
   const [editCell, setEditCell] = useState(null); // { rowIdx, field }
   const [editValue, setEditValue] = useState('');
   const [selectAllIndiv, setSelectAllIndiv] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
 
   const fileInputRef = useRef(null);
   const editInputRef = useRef(null);
@@ -635,6 +636,8 @@ export default function Home() {
   };
 
   // ─── Render ───────────────────────────────────────────
+  const warningsCount = items.filter(it => !it.manual && (it.source_price <= 0 || it.source_price > 500)).length;
+
   return (
     <div className="app-container">
       {/* ── Header ── */}
@@ -840,14 +843,26 @@ export default function Home() {
       </div>
 
       {/* ── Positions Table ── */}
+      {warningsCount > 0 && (
+        <div className="toast-error" style={{ position: 'relative', marginBottom: '16px', borderRadius: '4px', padding: '12px' }}>
+          ⚠️ {warningsCount} Position(en) haben einen verdächtigen Preis (0 € oder &gt; 500 €). Bitte prüfe diese Positionen manuell.
+        </div>
+      )}
       <div className="table-section" id="table-section">
         <div className="table-toolbar">
-          <div className="table-toolbar-left">
-            <label className="checkbox-label">
-              <input type="checkbox" className="checkbox-input" checked={selectAllIndiv}
-                onChange={toggleSelectAllIndiv} id="chk-select-all-indiv" />
-              Alle individuell bearbeiten
-            </label>
+          <div className="table-toolbar-left" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+              <label className="checkbox-label">
+                <input type="checkbox" className="checkbox-input" checked={selectAllIndiv}
+                  onChange={toggleSelectAllIndiv} id="chk-select-all-indiv" />
+                Alle individuell bearbeiten
+              </label>
+              <label className="checkbox-label" title="Originaldaten aus der eingelesenen Datei unter den bearbeiteten Werten einblenden">
+                <input type="checkbox" className="checkbox-input" checked={showOriginal}
+                  onChange={e => setShowOriginal(e.target.checked)} />
+                Originaldaten einblenden
+              </label>
+            </div>
             <span className="table-toolbar-hint">
               „Indiv.&quot; ankreuzen um Stk., EAN, Produktname und Einzelpreis manuell zu bearbeiten (Klick auf Zelle).
             </span>
@@ -882,9 +897,10 @@ export default function Home() {
                   const { ean, qty, product, unit } = getEffective(item, mf);
                   const total = qty * unit;
                   const isEditing = (field) => editCell?.rowIdx === idx && editCell?.field === field;
+                  const isWarning = !item.manual && (item.source_price <= 0 || item.source_price > 500);
 
                   return (
-                    <tr key={idx}>
+                    <tr key={idx} className={isWarning ? 'row-warning' : ''}>
                       <td className={`text-center ${item.individual ? 'editable' : ''}`}
                         onClick={() => item.individual && startEdit(idx, 'qty')}>
                         {isEditing('qty') ? (
@@ -912,6 +928,9 @@ export default function Home() {
                             onBlur={commitEdit}
                             onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }} />
                         ) : product}
+                        {showOriginal && item.individual && !item.manual && (
+                          <span className="original-data" title={item.product}>Orig: {item.product}</span>
+                        )}
                       </td>
                       <td className="text-center">
                         <input type="checkbox" className="table-checkbox" checked={!!item.individual}
@@ -925,7 +944,15 @@ export default function Home() {
                             onBlur={commitEdit}
                             onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }}
                             style={{ textAlign: 'right' }} />
-                        ) : `€ ${formatNumber(unit)}`}
+                        ) : (
+                          <>
+                            € {formatNumber(unit)}
+                            {isWarning && <span className="warning-icon" title="Verdächtiger Originalpreis">⚠️</span>}
+                          </>
+                        )}
+                        {showOriginal && item.individual && !item.manual && (
+                          <span className="original-data">Orig: € {formatNumber(item.source_price)}</span>
+                        )}
                       </td>
                       <td className="text-right">{`€ ${formatNumber(total)}`}</td>
                       {ustEnabled && <td className="text-center">{ustPct}%</td>}
