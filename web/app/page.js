@@ -4,12 +4,15 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { saveInvoiceToDb } from './utils/db';
 import { apiHeaders } from './utils/apiAuth';
 import { loadConfig as loadConfigBase, saveConfig } from './utils/config';
-import { formatCurrency, formatNumber, todayStr } from './utils/format';
+import { formatNumber, todayStr } from './utils/format';
 import { useToast } from './utils/useToast';
 import { useCustomerTemplates } from './utils/useCustomerTemplates';
 import Toast from './components/Toast';
-import TemplateSelector from './components/TemplateSelector';
 import StatusBar from './components/StatusBar';
+import DropZone from './components/DropZone';
+import SettingsPanel from './components/SettingsPanel';
+import CustomerPanel from './components/CustomerPanel';
+import ItemsTable from './components/ItemsTable';
 
 // ─── Constants ───────────────────────────────────────────
 const DEFAULT_CONFIG = {
@@ -613,338 +616,64 @@ export default function Home() {
         </div>
       </header>
 
-      {/* ── Drop Zone ── */}
-      <div
-        id="drop-zone"
-        className={`drop-zone ${dragOver ? 'drag-over' : ''} ${loadedFiles.length > 0 ? 'loaded' : ''}`}
+      <DropZone
+        loading={loading}
+        loadedFiles={loadedFiles}
+        itemCount={items.length}
+        dragOver={dragOver}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        onClick={onBrowse}
-      >
-        <span className="drop-zone-icon">
-          {loading ? <span className="spinner"></span> : loadedFiles.length > 0 ? '✅' : '📂'}
-        </span>
-        <p className="drop-zone-text">
-          {loading
-            ? 'Datei(en) werden eingelesen…'
-            : loadedFiles.length > 0
-              ? `${loadedFiles.length} Datei(en) · ${items.length} Positionen geladen — weitere Dateien hier ablegen`
-              : 'Excel- oder PDF-Datei(en) hierher ziehen oder klicken zum Auswählen'
-          }
-        </p>
-        {loadedFiles.length === 0 && !loading && (
-          <p className="drop-zone-hint">Unterstützt: .xlsx, .xls, .pdf (auch mehrere gleichzeitig)</p>
-        )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".xlsx,.xls,.pdf"
-          multiple
-          onChange={onFileChange}
-          id="file-input"
-        />
-      </div>
-
-      {/* ── Loaded Files List ── */}
-      {loadedFiles.length > 0 && (
-        <div className="loaded-files-list" id="loaded-files-list">
-          {loadedFiles.map(f => (
-            <div key={f.id} className={`loaded-file-row ${f.status === 'error' ? 'error' : ''}`}>
-              <span className="loaded-file-name">{f.name}</span>
-              <span className="loaded-file-count">
-                {f.status === 'error'
-                  ? f.error
-                  : f.isOwnInvoice
-                    ? `📄 Importierte Rechnung · ${f.count} Positionen`
-                    : f.format
-                      ? `${f.count} Positionen · Format: ${f.format}`
-                      : `${f.count} Positionen`}
-              </span>
-              <button className="loaded-file-remove" onClick={() => removeFile(f.id)} title="Datei entfernen">🗑</button>
-            </div>
-          ))}
-        </div>
-      )}
+        onBrowse={onBrowse}
+        onFileChange={onFileChange}
+        fileInputRef={fileInputRef}
+        removeFile={removeFile}
+      />
 
       {/* ── Settings + Customer Panels ── */}
       <div className="panels-row">
-        {/* Settings Panel */}
-        <div className="panel" id="panel-settings">
-          <h2 className="panel-title">
-            <span className="panel-title-icon">⚙️</span> Rechnungseinstellungen
-          </h2>
+        <SettingsPanel
+          invoiceNr={invoiceNr} setInvoiceNr={setInvoiceNr}
+          invoiceDate={invoiceDate} setInvoiceDate={setInvoiceDate}
+          markup={markup} setMarkup={setMarkup}
+          ustEnabled={ustEnabled} setUstEnabled={setUstEnabled}
+          ustPercent={ustPercent} setUstPercent={setUstPercent}
+          deliveryNote={deliveryNote} setDeliveryNote={setDeliveryNote}
+          weight={weight} setWeight={setWeight}
+          deliveryNoteText={deliveryNoteText} setDeliveryNoteText={setDeliveryNoteText}
+          isExport={isExport} setIsExport={setIsExport}
+          girocodeEnabled={girocodeEnabled} setGirocodeEnabled={setGirocodeEnabled}
+          euTextEnabled={euTextEnabled} setEuTextEnabled={setEuTextEnabled}
+          invoiceNoteText={invoiceNoteText} setInvoiceNoteText={setInvoiceNoteText}
+        />
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="invoiceNr">Rechnungsnr.:</label>
-            <input id="invoiceNr" className="form-input" value={invoiceNr}
-              onChange={e => setInvoiceNr(e.target.value)} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="invoiceDate">Datum:</label>
-            <input id="invoiceDate" className="form-input" value={invoiceDate}
-              onChange={e => setInvoiceDate(e.target.value)} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="markup">Aufschlag %:</label>
-            <input id="markup" className="form-input form-input-sm" value={markup}
-              onChange={e => setMarkup(e.target.value)} />
-          </div>
-
-          <div className="checkbox-group">
-            <label className="checkbox-label">
-              <input type="checkbox" className="checkbox-input" checked={ustEnabled}
-                onChange={e => setUstEnabled(e.target.checked)} id="chk-ust" />
-              USt. berechnen
-            </label>
-            <div className="inline-field">
-              <input className="form-input form-input-sm" value={ustPercent}
-                onChange={e => setUstPercent(e.target.value)} disabled={!ustEnabled} id="ust-percent" />
-              <span className="field-suffix">%</span>
-            </div>
-          </div>
-
-          <div className="checkbox-group">
-            <label className="checkbox-label">
-              <input type="checkbox" className="checkbox-input" checked={deliveryNote}
-                onChange={e => setDeliveryNote(e.target.checked)} id="chk-delivery" />
-              Lieferschein erstellen
-            </label>
-            <div className="inline-field">
-              <input className="form-input form-input-sm" value={weight}
-                onChange={e => setWeight(e.target.value)} disabled={!deliveryNote} id="weight" />
-              <span className="field-suffix">kg</span>
-            </div>
-          </div>
-
-          <div className="form-group full-width" style={{ marginTop: 6 }}>
-            <label className="form-label">Lieferschein-Notiz:</label>
-            <textarea className="form-textarea" value={deliveryNoteText}
-              onChange={e => setDeliveryNoteText(e.target.value)} disabled={!deliveryNote}
-              rows={2} id="delivery-note-text" />
-          </div>
-
-          <div className="checkbox-group">
-            <label className="checkbox-label">
-              <input type="checkbox" className="checkbox-input" checked={isExport}
-                onChange={e => setIsExport(e.target.checked)} id="chk-export" />
-              Export-Rechnung
-            </label>
-          </div>
-
-          <div className="checkbox-group">
-            <label className="checkbox-label">
-              <input type="checkbox" className="checkbox-input" checked={girocodeEnabled}
-                onChange={e => setGirocodeEnabled(e.target.checked)} id="chk-girocode" />
-              QR-Code
-            </label>
-          </div>
-
-          <div className="checkbox-group">
-            <label className="checkbox-label" title="Steuerfreie, innergemeinschaftliche Lieferung gem. Artikel 6 UStG.">
-              <input type="checkbox" className="checkbox-input" checked={euTextEnabled}
-                onChange={e => setEuTextEnabled(e.target.checked)} id="chk-eu-text" />
-              EU-Lieferungshinweis
-            </label>
-          </div>
-
-          <div className="form-group full-width" style={{ marginTop: 6 }}>
-            <label className="form-label">Rechnungs-Notiz:</label>
-            <textarea className="form-textarea" value={invoiceNoteText}
-              onChange={e => setInvoiceNoteText(e.target.value)} rows={2} id="invoice-note-text" />
-          </div>
-        </div>
-
-        {/* Customer Panel */}
-        <div className="panel" id="panel-customer">
-          <h2 className="panel-title">
-            <span className="panel-title-icon">👤</span> Kundenadresse
-          </h2>
-
-          <TemplateSelector
-            templateNames={templateNames}
-            selectedTemplate={selectedTemplate}
-            onSelect={onTemplateSelect}
-            onSave={saveTemplate}
-            onDelete={deleteTemplate}
-          />
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="custName">Firma:</label>
-            <input id="custName" className="form-input" value={custName}
-              onChange={e => setCustName(e.target.value)} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="custStreet">Straße:</label>
-            <input id="custStreet" className="form-input" value={custStreet}
-              onChange={e => setCustStreet(e.target.value)} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="custPlz">PLZ / Ort:</label>
-            <input id="custPlz" className="form-input" value={custPlz}
-              onChange={e => setCustPlz(e.target.value)} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="custCountry">Land:</label>
-            <input id="custCountry" className="form-input" value={custCountry}
-              onChange={e => setCustCountry(e.target.value)} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="custVat">VAT-Nr.:</label>
-            <input id="custVat" className="form-input" value={custVat}
-              onChange={e => setCustVat(e.target.value)} />
-          </div>
-        </div>
+        <CustomerPanel
+          templateNames={templateNames}
+          selectedTemplate={selectedTemplate}
+          onTemplateSelect={onTemplateSelect}
+          saveTemplate={saveTemplate}
+          deleteTemplate={deleteTemplate}
+          custName={custName} setCustName={setCustName}
+          custStreet={custStreet} setCustStreet={setCustStreet}
+          custPlz={custPlz} setCustPlz={setCustPlz}
+          custCountry={custCountry} setCustCountry={setCustCountry}
+          custVat={custVat} setCustVat={setCustVat}
+        />
       </div>
 
       {/* ── Positions Table ── */}
-      {warningsCount > 0 && (
-        <div className="toast-error" style={{ position: 'relative', marginBottom: '16px', borderRadius: '4px', padding: '12px' }}>
-          ⚠️ {warningsCount} Position(en) haben einen verdächtigen Preis (0 € oder &gt; 500 €). Bitte prüfe diese Positionen manuell.
-        </div>
-      )}
-      <div className="table-section" id="table-section">
-        <div className="table-toolbar">
-          <div className="table-toolbar-left" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-              <label className="checkbox-label">
-                <input type="checkbox" className="checkbox-input" checked={selectAllIndiv}
-                  onChange={toggleSelectAllIndiv} id="chk-select-all-indiv" />
-                Alle individuell bearbeiten
-              </label>
-              <label className="checkbox-label" title="Originaldaten aus der eingelesenen Datei unter den bearbeiteten Werten einblenden">
-                <input type="checkbox" className="checkbox-input" checked={showOriginal}
-                  onChange={e => setShowOriginal(e.target.checked)} />
-                Originaldaten einblenden
-              </label>
-            </div>
-            <span className="table-toolbar-hint">
-              „Indiv.&quot; ankreuzen um Stk., EAN, Produktname und Einzelpreis manuell zu bearbeiten (Klick auf Zelle).
-            </span>
-          </div>
-          <button className="btn btn-secondary btn-sm" onClick={addManualRow} id="btn-add-row">
-            ➕ Neue Zeile
-          </button>
-        </div>
-
-        <div className="table-wrapper">
-          {items.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state-icon">📋</div>
-              <p className="empty-state-text">Noch keine Positionen geladen. Bitte oben eine Datei hochladen.</p>
-            </div>
-          ) : (
-            <table className="data-table" id="data-table">
-              <thead>
-                <tr>
-                  <th className="text-center" style={{ width: 55 }}>Stk.</th>
-                  <th style={{ width: 130 }}>EAN</th>
-                  <th>Produkt</th>
-                  <th className="text-center" style={{ width: 60 }}>Indiv.</th>
-                  <th className="text-right" style={{ width: 120 }}>Einzelpreis €</th>
-                  <th className="text-right" style={{ width: 120 }}>Gesamtpreis €</th>
-                  {ustEnabled && <th className="text-center" style={{ width: 60 }}>USt.</th>}
-                  <th className="text-center" style={{ width: 44 }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, idx) => {
-                  const { ean, qty, product, unit } = getEffective(item, mf);
-                  const total = qty * unit;
-                  const isEditing = (field) => editCell?.rowIdx === idx && editCell?.field === field;
-                  const isWarning = !item.manual && (unit <= 0 || unit > 500);
-
-                  return (
-                    <tr key={idx} className={isWarning ? 'row-warning' : ''}>
-                      <td className={`text-center ${item.individual ? 'editable' : ''}`}
-                        onClick={() => item.individual && startEdit(idx, 'qty')}>
-                        {isEditing('qty') ? (
-                          <input ref={editInputRef} className="cell-edit-input" value={editValue}
-                            onChange={e => setEditValue(e.target.value)}
-                            onBlur={commitEdit}
-                            onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }}
-                            style={{ width: 45, textAlign: 'center' }} />
-                        ) : qty}
-                      </td>
-                      <td className={item.individual ? 'editable' : ''}
-                        onClick={() => item.individual && startEdit(idx, 'ean')}>
-                        {isEditing('ean') ? (
-                          <input ref={editInputRef} className="cell-edit-input" value={editValue}
-                            onChange={e => setEditValue(e.target.value)}
-                            onBlur={commitEdit}
-                            onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }} />
-                        ) : ean}
-                      </td>
-                      <td className={item.individual ? 'editable' : ''}
-                        onClick={() => item.individual && startEdit(idx, 'product')}>
-                        {isEditing('product') ? (
-                          <input ref={editInputRef} className="cell-edit-input" value={editValue}
-                            onChange={e => setEditValue(e.target.value)}
-                            onBlur={commitEdit}
-                            onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }} />
-                        ) : product}
-                        {showOriginal && !item.manual && product !== item.product && (
-                          <span className="original-data" title={item.product}>Orig: {item.product}</span>
-                        )}
-                      </td>
-                      <td className="text-center">
-                        <input type="checkbox" className="table-checkbox" checked={!!item.individual}
-                          onChange={() => toggleIndividual(idx)} disabled={item.manual} />
-                      </td>
-                      <td className={`text-right ${item.individual ? 'editable' : ''}`}
-                        onClick={() => item.individual && startEdit(idx, 'unit')}>
-                        {isEditing('unit') ? (
-                          <input ref={editInputRef} className="cell-edit-input" value={editValue}
-                            onChange={e => setEditValue(e.target.value)}
-                            onBlur={commitEdit}
-                            onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }}
-                            style={{ textAlign: 'right' }} />
-                        ) : (
-                          <>
-                            € {formatNumber(unit)}
-                            {isWarning && <span className="warning-icon" title="Verdächtiger Originalpreis">⚠️</span>}
-                          </>
-                        )}
-                        {showOriginal && !item.manual && Math.round(unit * 100) !== Math.round(item.source_price * 100) && (
-                          <span className="original-data" title="Preis aus der Quelldatei, vor Aufschlag">Orig (vor Aufschlag): € {formatNumber(item.source_price)}</span>
-                        )}
-                      </td>
-                      <td className="text-right">{`€ ${formatNumber(total)}`}</td>
-                      {ustEnabled && <td className="text-center">{ustPct}%</td>}
-                      <td className="text-center">
-                        <button className="table-delete-btn" onClick={() => deleteItem(idx)} title="Position entfernen">🗑</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {items.length > 0 && (
-          <div className="table-footer">
-            <span className="text-muted">{items.length} Positionen</span>
-            <div className="table-total">
-              {ustEnabled ? (
-                <>
-                  Netto: {formatCurrency(totalNetto)} &nbsp;·&nbsp;
-                  USt. {ustPct}%: {formatCurrency(totalUst)} &nbsp;·&nbsp;
-                  <strong>Brutto: {formatCurrency(totalBrutto)}</strong>
-                </>
-              ) : (
-                <>Gesamtsumme Netto: {formatCurrency(totalNetto)}</>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+      <ItemsTable
+        items={items} mf={mf} getEffective={getEffective}
+        ustEnabled={ustEnabled} ustPct={ustPct}
+        totalNetto={totalNetto} totalUst={totalUst} totalBrutto={totalBrutto}
+        warningsCount={warningsCount}
+        selectAllIndiv={selectAllIndiv} toggleSelectAllIndiv={toggleSelectAllIndiv}
+        showOriginal={showOriginal} setShowOriginal={setShowOriginal}
+        addManualRow={addManualRow}
+        editCell={editCell} editValue={editValue} setEditValue={setEditValue} editInputRef={editInputRef}
+        startEdit={startEdit} commitEdit={commitEdit} cancelEdit={cancelEdit}
+        toggleIndividual={toggleIndividual} deleteItem={deleteItem}
+      />
 
       {/* ── Action Bar ── */}
       <div className="action-bar" id="action-bar">
