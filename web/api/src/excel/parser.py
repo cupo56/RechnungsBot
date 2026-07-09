@@ -1,29 +1,77 @@
 """
 Excel-Parser für RechnungsBot.
-Liest die Superfeed-Excel-Datei ein und extrahiert bestellte Positionen.
+Liest Excel-Dateien verschiedener Lieferanten ein und extrahiert bestellte
+Positionen.  Unterstützt .xlsx (openpyxl) und optional .xls (xlrd).
+
+Erkennt Spaltenköpfe anhand erweiterter Keyword-Sets (DE/EN/CZ/PL),
+durchsucht alle Tabellenblätter und bis zu 20 Zeilen pro Blatt.
 """
 
+import os
 import re
+
 import openpyxl
 
-# Vorcompilierte Patterns – einmalig beim Modulimport, nicht bei jedem Aufruf
+# Optionaler .xls-Support ─────────────────────────────────────────────
+try:
+    import xlrd  # type: ignore
+
+    _HAS_XLRD = True
+except ImportError:
+    _HAS_XLRD = False
+
+# ─── Regex-Patterns ──────────────────────────────────────────────────
 _RE_GENDER = re.compile(r'\s*\((man|woman|unisex)\)\s*', re.IGNORECASE)
-_RE_COVER  = re.compile(
+_RE_COVER = re.compile(
     r'\s*\((New Cover|Old Cover|Cover with [^)]+|Without box|[A-Za-z]+ Cover[^)]*)\)\s*',
     re.IGNORECASE,
 )
 _RE_WHITESPACE = re.compile(r'\s{2,}')
+_RE_CURRENCY = re.compile(r'[€$£¥₹₽\s]')
 
 # Parfüm-Bezeichnungen: längere Varianten zuerst, damit kein Teilmatch vorgreift
 _FRAGRANCE_REPLACEMENTS = [
     (re.compile(r'Eau De Parfum Intense', re.IGNORECASE), 'EdP Intense'),
-    (re.compile(r'Eau De Parfum',         re.IGNORECASE), 'EdP'),
-    (re.compile(r'Eau De Toilette',       re.IGNORECASE), 'EdT'),
-    (re.compile(r'Eau De Cologne Intense',re.IGNORECASE), 'EdC Intense'),
-    (re.compile(r'Eau De Cologne',        re.IGNORECASE), 'EdC'),
-    (re.compile(r'Extrait de Parfum',     re.IGNORECASE), 'Extrait'),
-    (re.compile(r'Parfum Intense',        re.IGNORECASE), 'Parfum Intense'),
+    (re.compile(r'Eau De Parfum', re.IGNORECASE), 'EdP'),
+    (re.compile(r'Eau De Toilette', re.IGNORECASE), 'EdT'),
+    (re.compile(r'Eau De Cologne Intense', re.IGNORECASE), 'EdC Intense'),
+    (re.compile(r'Eau De Cologne', re.IGNORECASE), 'EdC'),
+    (re.compile(r'Extrait de Parfum', re.IGNORECASE), 'Extrait'),
+    (re.compile(r'Parfum Intense', re.IGNORECASE), 'Parfum Intense'),
 ]
+
+# ─── Keyword-Sets für Spaltenköpfe ───────────────────────────────────
+_QUANTITY_KEYWORDS = {
+    "order", "quantity", "bestellung", "qty", "menge",
+    "stück", "stk", "anzahl", "amount", "pcs",
+    "ilość", "množství",
+}
+
+_PRODUCT_KEYWORDS = {
+    "product", "produkt", "beschreibung", "description",
+    "název", "artikelbezeichnung", "artikel", "nazwa",
+    "bezeichnung", "item", "article", "name", "towar",
+}
+
+_PRICE_KEYWORDS = {
+    "price", "preis", "cena", "einzelpreis", "unit price",
+    "e.k.", "ek", "vk", "netto", "unitprice",
+}
+
+# Spalten mit diesen Keywords werden NICHT als Preis erkannt
+_PRICE_EXCLUDE = {"bulk", "120", "total", "gesamt", "brutto", "summe"}
+
+_EAN_KEYWORDS = {"ean", "barcode", "gtin", "upc"}
+
+# Maximale Zeile bis zu der nach Spaltenköpfen gesucht wird
+_MAX_HEADER_SEARCH_ROW = 20
+
+
+# ─── Hilfsfunktionen ─────────────────────────────────────────────────
+
+def _matches_any(cell_val: str, keywords: set[str]) -> bool:
+    """Prüft ob *irgendein* Keyword als Substring im Zellenwert vorkommt."""
+    return any(kw in cell_val for kw in keywords)
 
 
 def shorten_product_name(name):
@@ -51,69 +99,100 @@ def shorten_product_name(name):
     return _RE_WHITESPACE.sub(' ', text).strip()
 
 
-def parse_excel(filepath):
+def _parse_price(value) -> float:
+    """Robuste Konvertierung eines Zellwerts in einen float-Preis.
+
+    Behandelt:
+    - Numerische Werte (int/float)
+    - Strings mit Währungssymbolen (€, $, £, …)
+    - Deutsches Zahlenformat (1.234,56)
+    - Englisches Zahlenformat (1,234.56)
     """
-    Liest eine Superfeed-Excel-Datei und gibt bestellte Positionen zurück.
+    if value is None:
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    text = _RE_CURRENCY.sub('', str(value).strip())
+    if not text:
+        return 0.0
+
+    # Deutsches vs. englisches Format
+    if ',' in text and '.' in text:
+        if text.rindex(',') > text.rindex('.'):
+            # 1.234,56 → deutsches Format
+            text = text.replace('.', '').replace(',', '.')
+        else:
+            # 1,234.56 → englisches Format
+            text = text.replace(',', '')
+    elif ',' in text:
+        # Nur Komma → deutsches Dezimaltrennzeichen
+        text = text.replace(',', '.')
+
+    try:
+        return float(text)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def _find_header(row_iterator, max_rows: int = _MAX_HEADER_SEARCH_ROW):
+    """Durchsucht Zeilen nach einer Kopfzeile mit Mengen-Keyword.
+
+    Args:
+        row_iterator: Iterator über Zeilen (Tupel von Zellwerten).
+        max_rows: Maximale Anzahl zu durchsuchender Zeilen.
 
     Returns:
-        list[dict]: Liste von Positionen mit Schlüsseln:
-            - ean (str): EAN-Code
-            - product (str): Gekürzter Produktname
-            - quantity (int): Bestellmenge
-            - source_price (float): Einkaufspreis aus der Quelldatei
+        tuple: (header_row_number, col_map) oder (None, None).
+               col_map hat Schlüssel 'ean', 'product', 'price', 'order'.
     """
-    wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
-    ws = wb.active
-
-    # Spalten automatisch erkennen anhand der Kopfzeile
-    # In read_only-Modus iter_rows() verwenden (viel schneller als cell())
-    col_ean = None
-    col_product = None
-    col_price = None
-    col_order = None
-    header_found = False
-    rows_to_skip = 0
-
-    for row in ws.iter_rows(min_row=1, max_row=5, values_only=True):
-        rows_to_skip += 1
-        cells_lower = [str(c).lower().strip() if c else "" for c in row]
-
-        if any("order" in c or "quantity" in c or "bestellung" in c or "qty" in c for c in cells_lower):
-            header_found = True
-            for col_idx, cell_val in enumerate(cells_lower):
-                if "ean" in cell_val and col_ean is None:
-                    col_ean = col_idx
-                elif ("product" in cell_val or "produkt" in cell_val or "beschreibung" in cell_val or "description" in cell_val or "název" in cell_val):
-                    if col_product is None:
-                        col_product = col_idx
-                elif ("price" in cell_val or "preis" in cell_val) and "bulk" not in cell_val and "120" not in cell_val:
-                    if col_price is None:
-                        col_price = col_idx
-                elif "order" in cell_val or "bestellung" in cell_val or "quantity" in cell_val or "qty" in cell_val:
-                    if col_order is None:
-                        col_order = col_idx
+    for row_num, row in enumerate(row_iterator, start=1):
+        if row_num > max_rows:
             break
 
-    if not header_found:
-        wb.close()
-        raise ValueError(
-            "Konnte die Spaltenüberschriften nicht erkennen.\n"
-            "Die Excel-Datei muss mindestens eine Spalte mit 'Order' enthalten."
-        )
+        cells_lower = [str(c).lower().strip() if c else "" for c in row]
 
-    # EAN ist optional – nur Product, Price und Order sind Pflicht
-    required = {"Product/Produkt": col_product, "Price/Preis": col_price, "Order/Bestellung": col_order}
-    missing = [name for name, idx in required.items() if idx is None]
-    if missing:
-        wb.close()
-        raise ValueError(f"Fehlende Spalten: {', '.join(missing)}")
+        # Enthält die Zeile ein Mengen-/Bestellungs-Keyword?
+        if not any(_matches_any(c, _QUANTITY_KEYWORDS) for c in cells_lower):
+            continue
 
-    # Datenzeilen einlesen – iter_rows() ist 10-50x schneller als cell()
-    # weil openpyxl im read_only-Modus die Zeilen streamt
+        # Spalten zuordnen
+        col_map = {'ean': None, 'product': None, 'price': None, 'order': None}
+
+        for col_idx, cell_val in enumerate(cells_lower):
+            if not cell_val:
+                continue
+
+            if _matches_any(cell_val, _EAN_KEYWORDS) and col_map['ean'] is None:
+                col_map['ean'] = col_idx
+            elif _matches_any(cell_val, _PRODUCT_KEYWORDS) and col_map['product'] is None:
+                col_map['product'] = col_idx
+            elif (
+                _matches_any(cell_val, _PRICE_KEYWORDS)
+                and not _matches_any(cell_val, _PRICE_EXCLUDE)
+                and col_map['price'] is None
+            ):
+                col_map['price'] = col_idx
+            elif _matches_any(cell_val, _QUANTITY_KEYWORDS) and col_map['order'] is None:
+                col_map['order'] = col_idx
+
+        return row_num, col_map
+
+    return None, None
+
+
+def _extract_items(row_iterator, col_map: dict) -> list[dict]:
+    """Extrahiert Positionen aus Datenzeilen anhand der Spaltenzuordnung."""
+    col_ean = col_map['ean']
+    col_product = col_map['product']
+    col_price = col_map['price']
+    col_order = col_map['order']
+
     items = []
-    for row in ws.iter_rows(min_row=rows_to_skip + 1, values_only=True):
-        # Schneller Abbruch: Order-Spalte zuerst prüfen
+    for row in row_iterator:
         ncols = len(row)
+
+        # Schneller Abbruch: Order-Spalte zuerst prüfen
         if col_order >= ncols:
             continue
         order_val = row[col_order]
@@ -138,24 +217,153 @@ def parse_excel(filepath):
         else:
             ean_str = ""
 
-        product_raw = row[col_product] if col_product < ncols else ""
-        price_raw = row[col_price] if col_price < ncols else 0
-
-        try:
-            price = float(price_raw) if price_raw else 0.0
-        except (ValueError, TypeError):
-            price = 0.0
+        product_raw = row[col_product] if col_product is not None and col_product < ncols else ""
+        price_raw = row[col_price] if col_price is not None and col_price < ncols else 0
 
         items.append({
             "ean": ean_str,
             "product": shorten_product_name(product_raw or ""),
             "quantity": order_qty,
-            "source_price": price,
+            "source_price": _parse_price(price_raw),
         })
 
-    wb.close()
-
-    # Alphabetisch nach Produktname sortieren
-    items.sort(key=lambda x: x["product"].lower())
-
     return items
+
+
+def _build_error_message(searched_sheets: list[str]) -> str:
+    """Erzeugt eine strukturierte Fehlermeldung mit Diagnose-Hinweisen."""
+    qty_kw = ", ".join(sorted(_QUANTITY_KEYWORDS))
+    prod_kw = ", ".join(sorted(_PRODUCT_KEYWORDS))
+    price_kw = ", ".join(sorted(_PRICE_KEYWORDS))
+    ean_kw = ", ".join(sorted(_EAN_KEYWORDS))
+
+    return (
+        "Konnte keine Spaltenüberschriften erkennen.\n"
+        "\n"
+        f"Durchsuchte Blätter: {', '.join(searched_sheets) if searched_sheets else '(keine)'}\n"
+        f"Durchsuchte Zeilen: 1–{_MAX_HEADER_SEARCH_ROW} (pro Blatt)\n"
+        "\n"
+        "Unterstützte Spaltenbezeichnungen:\n"
+        f"  • Menge/Bestellung: {qty_kw}\n"
+        f"  • Produkt:          {prod_kw}\n"
+        f"  • Preis:            {price_kw}\n"
+        f"  • EAN (optional):   {ean_kw}\n"
+        "\n"
+        "Bitte prüfe, ob die Excel-Datei eine Kopfzeile mit diesen "
+        "Bezeichnungen enthält (in den ersten 20 Zeilen)."
+    )
+
+
+# ─── .xls-Support (Legacy) ──────────────────────────────────────────
+
+def _parse_xls_legacy(filepath: str) -> list[dict]:
+    """Parst eine .xls-Datei via xlrd. Gibt dieselbe Struktur wie parse_excel() zurück."""
+    if not _HAS_XLRD:
+        raise ValueError(
+            "Die Datei hat das ältere .xls-Format.\n"
+            "Bitte konvertiere sie in .xlsx (Excel → Speichern unter → .xlsx) "
+            "oder installiere das Python-Paket 'xlrd' (pip install xlrd)."
+        )
+
+    wb = xlrd.open_workbook(filepath)
+    searched_sheets: list[str] = []
+
+    for sheet in wb.sheets():
+        searched_sheets.append(sheet.name)
+
+        # Zeilen als Tupel-Iterator bereitstellen (wie openpyxl values_only)
+        def _row_iter(sh=sheet):
+            for rx in range(sh.nrows):
+                yield tuple(sh.cell_value(rx, cx) for cx in range(sh.ncols))
+
+        rows = _row_iter()
+        header_row, col_map = _find_header(rows)
+
+        if header_row is None:
+            continue
+
+        # Pflichtfelder prüfen
+        required = {"Product/Produkt": col_map['product'], "Price/Preis": col_map['price'],
+                     "Order/Bestellung": col_map['order']}
+        missing = [name for name, idx in required.items() if idx is None]
+        if missing:
+            continue
+
+        # Datenzeilen ab header_row+1 lesen
+        def _data_iter(sh=sheet, start=header_row):
+            for rx in range(start, sh.nrows):
+                yield tuple(sh.cell_value(rx, cx) for cx in range(sh.ncols))
+
+        items = _extract_items(_data_iter(), col_map)
+        if items:
+            items.sort(key=lambda x: x["product"].lower())
+            return items
+
+    raise ValueError(_build_error_message(searched_sheets))
+
+
+# ─── Hauptfunktion ───────────────────────────────────────────────────
+
+def parse_excel(filepath):
+    """
+    Liest eine Excel-Datei (xlsx oder xls) und gibt bestellte Positionen zurück.
+
+    Durchsucht alle Tabellenblätter und bis zu 20 Zeilen pro Blatt nach
+    einer erkennbaren Kopfzeile. Unterstützt Spaltenbezeichnungen in
+    Deutsch, Englisch, Tschechisch und Polnisch.
+
+    Returns:
+        list[dict]: Liste von Positionen mit Schlüsseln:
+            - ean (str): EAN-Code (leer wenn nicht vorhanden)
+            - product (str): Gekürzter Produktname
+            - quantity (int): Bestellmenge
+            - source_price (float): Einkaufspreis aus der Quelldatei
+    """
+    ext = os.path.splitext(filepath)[1].lower()
+
+    # .xls → Legacy-Pfad
+    if ext == '.xls':
+        return _parse_xls_legacy(filepath)
+
+    # .xlsx → openpyxl
+    wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+    searched_sheets: list[str] = []
+
+    try:
+        for ws in wb.worksheets:
+            searched_sheets.append(ws.title)
+
+            # Header suchen (Zeile 1–20)
+            header_row, col_map = _find_header(
+                ws.iter_rows(min_row=1, max_row=_MAX_HEADER_SEARCH_ROW, values_only=True)
+            )
+
+            if header_row is None:
+                continue
+
+            # Pflichtfelder prüfen
+            required = {
+                "Product/Produkt": col_map['product'],
+                "Price/Preis": col_map['price'],
+                "Order/Bestellung": col_map['order'],
+            }
+            missing = [name for name, idx in required.items() if idx is None]
+            if missing:
+                # Dieses Blatt hat zwar ein Mengen-Keyword, aber nicht alle Pflichtspalten
+                # → nächstes Blatt probieren
+                continue
+
+            # Datenzeilen einlesen ab der Zeile nach dem Header
+            items = _extract_items(
+                ws.iter_rows(min_row=header_row + 1, values_only=True),
+                col_map,
+            )
+
+            if items:
+                items.sort(key=lambda x: x["product"].lower())
+                return items
+
+    finally:
+        wb.close()
+
+    raise ValueError(_build_error_message(searched_sheets))
