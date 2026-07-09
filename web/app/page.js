@@ -211,21 +211,24 @@ export default function Home() {
 
   // ─── File Upload / Parse ──────────────────────────────
   const parseOneFile = useCallback(async (file) => {
-    const MAX_SIZE = 4.5 * 1024 * 1024; // 4.5 MB (Vercel payload limit)
+    // Files are sent as base64 inside a JSON body (not multipart/form-data):
+    // Vercel's edge WAF blocks multipart uploads with a 403 for some PDFs
+    // whose compressed binary stream happens to match an attack pattern
+    // (see git history — this was already hit and fixed once before).
+    // Base64 inflates the raw file size by ~33%, and Vercel's request body
+    // limit is ~4.5 MB, so the raw file must stay well under that.
+    const MAX_SIZE = 3.3 * 1024 * 1024; // ~3.3 MB raw → ~4.4 MB as base64+JSON
     if (file.size > MAX_SIZE) {
-      throw new Error(`Datei ist zu groß (max. 4.5 MB). Aktuell: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
+      throw new Error(`Datei ist zu groß (max. ${(MAX_SIZE / 1024 / 1024).toFixed(1)} MB). Aktuell: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const headers = apiHeaders();
-    delete headers['Content-Type']; // Let browser set Content-Type with boundary
+    const buffer = await file.arrayBuffer();
+    const base64 = btoa(Array.from(new Uint8Array(buffer), b => String.fromCharCode(b)).join(''));
 
     const resp = await fetch('/api/parse', {
       method: 'POST',
-      headers: headers,
-      body: formData,
+      headers: apiHeaders(),
+      body: JSON.stringify({ filename: file.name, file_base64: base64 }),
     });
     if (!resp.ok) {
       const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));

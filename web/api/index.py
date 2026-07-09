@@ -45,13 +45,15 @@ def _require_shared_secret():
 # --- PARSE ---
 @app.route('/api/parse', methods=['POST'])
 def parse_file():
-    if 'file' not in request.files:
+    # JSON+base64 instead of multipart/form-data: Vercel's edge WAF blocks
+    # multipart uploads with a 403 for some PDFs whose compressed binary
+    # stream happens to match an attack pattern (long backslash-byte runs).
+    # Base64 inside a JSON body avoids the raw multipart body scan.
+    payload = request.json or {}
+    filename = payload.get("filename", "")
+    file_base64 = payload.get("file_base64")
+    if not filename or not file_base64:
         return jsonify({"error": "Keine Datei hochgeladen."}), 400
-
-    file_obj = request.files['file']
-    filename = file_obj.filename
-    if not filename:
-        return jsonify({"error": "Ungültiger Dateiname."}), 400
 
     # Save to temp file
     ext = os.path.splitext(filename)[1].lower()
@@ -59,7 +61,8 @@ def parse_file():
     os.close(fd)
 
     try:
-        file_obj.save(temp_path)
+        with open(temp_path, "wb") as f:
+            f.write(base64.b64decode(file_base64))
 
         if ext == ".pdf":
             from src.pdf_input.own_invoice_parser import is_own_invoice, parse_own_invoice
