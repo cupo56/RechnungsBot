@@ -211,13 +211,21 @@ export default function Home() {
 
   // ─── File Upload / Parse ──────────────────────────────
   const parseOneFile = useCallback(async (file) => {
-    const buffer = await file.arrayBuffer();
-    const base64 = btoa(Array.from(new Uint8Array(buffer), b => String.fromCharCode(b)).join(''));
+    const MAX_SIZE = 4.5 * 1024 * 1024; // 4.5 MB (Vercel payload limit)
+    if (file.size > MAX_SIZE) {
+      throw new Error(`Datei ist zu groß (max. 4.5 MB). Aktuell: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const headers = apiHeaders();
+    delete headers['Content-Type']; // Let browser set Content-Type with boundary
 
     const resp = await fetch('/api/parse', {
       method: 'POST',
-      headers: apiHeaders(),
-      body: JSON.stringify({ filename: file.name, file_base64: base64 }),
+      headers: headers,
+      body: formData,
     });
     if (!resp.ok) {
       const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
@@ -838,7 +846,7 @@ export default function Home() {
               Alle individuell bearbeiten
             </label>
             <span className="table-toolbar-hint">
-              „Indiv." ankreuzen um Stk., EAN, Produktname und Einzelpreis manuell zu bearbeiten (Klick auf Zelle).
+              „Indiv.&quot; ankreuzen um Stk., EAN, Produktname und Einzelpreis manuell zu bearbeiten (Klick auf Zelle).
             </span>
           </div>
           <button className="btn btn-secondary btn-sm" onClick={addManualRow} id="btn-add-row">
