@@ -488,31 +488,70 @@ def parse_pdf(filepath: str) -> list[dict]:
             - quantity (int): Bestellmenge
             - source_price (float): Einkaufspreis aus der Quelldatei
     """
-    items = _parse_cipo(filepath)
+    # Jeder Eintrag: (Name, Parser-Funktion, kurze Beschreibung der erwarteten Struktur)
+    _PARSERS = [
+        (
+            "CIPO",
+            _parse_cipo,
+            "Tabelle mit Spalten 'Unit Price'/'Quantity' und Zeilen im Format '<Produkt> <Preis> <Menge> piece'",
+        ),
+        (
+            "ALINA-Rechnung",
+            _parse_alina_invoice,
+            "Tabelle mit 7 Spalten: Pos. | EAN Code | Description | Quantity | Unit Price | Disc.% | Amount",
+        ),
+        (
+            "ALINA-Bestellung",
+            _parse_alina_po,
+            "Tabelle mit 6 Spalten: Nr. | EAN Code | Beschreibung | Menge | EK-Preis | Betrag",
+        ),
+        (
+            "MATIVA",
+            _parse_mativa,
+            "Fließtext mit Zeilen wie '<Nr.> <Art.-Nr.> <Name> <Menge>,00 PCS <Preis>' gefolgt von EAN-Zeile",
+        ),
+        (
+            "ZNZ",
+            _parse_znz,
+            "Fließtext zwischen 'Quantity/Unit Price'-Kopf und 'Invoice total', "
+            "Artikelzeile + Datenzeile mit 'ks' als Mengeneinheit",
+        ),
+        (
+            "PWV",
+            _parse_pwv,
+            "Fließtext mit Zeilen wie '<Pos> <Art.-Nr.> <Name> <Menge> STK <Preis> <Betrag>' "
+            "gefolgt von 'EAN <Code>'",
+        ),
+        (
+            "FCT",
+            _parse_fct,
+            "Fließtext mit Zeilen wie '<Name> <Menge> <Einzelpreis> <Gesamtpreis>' "
+            "gefolgt von einer EAN-Zeile (8–14-stellig)",
+        ),
+    ]
 
-    if not items:
-        items = _parse_alina_invoice(filepath)
+    tried: list[str] = []
+    for name, parser_fn, _hint in _PARSERS:
+        items = parser_fn(filepath)
+        if items:
+            items.sort(key=lambda x: x["product"].lower())
+            return items
+        tried.append(name)
 
-    if not items:
-        items = _parse_alina_po(filepath)
-
-    if not items:
-        items = _parse_mativa(filepath)
-
-    if not items:
-        items = _parse_znz(filepath)
-
-    if not items:
-        items = _parse_pwv(filepath)
-
-    if not items:
-        items = _parse_fct(filepath)
-
-    if not items:
-        raise ValueError(
-            "Keine Positionen gefunden.\n"
-            "Das PDF muss eine Tabelle mit 'Unit Price' und 'Quantity' enthalten."
-        )
-
-    items.sort(key=lambda x: x["product"].lower())
-    return items
+    # Kein Parser hat Positionen gefunden → strukturierte Fehlermeldung
+    supported_list = "\n".join(
+        f"  • {name}: {hint}" for name, _fn, hint in _PARSERS
+    )
+    raise ValueError(
+        "Keine Positionen im PDF gefunden.\n"
+        "\n"
+        f"Probierte Formate ({len(tried)}/{len(_PARSERS)}):\n"
+        + "\n".join(f"  ✗ {name}" for name in tried)
+        + "\n\n"
+        "Unterstützte Formate und deren erwartete Struktur:\n"
+        + supported_list
+        + "\n\n"
+        "Bitte prüfe, ob das PDF einem der oben genannten Formate entspricht.\n"
+        "Falls es sich um ein neues Lieferantenformat handelt, muss ein "
+        "zusätzlicher Parser implementiert werden."
+    )
