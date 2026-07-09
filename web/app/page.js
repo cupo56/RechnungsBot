@@ -243,6 +243,7 @@ export default function Home() {
       isOwnInvoice: data.invoice_type === 'own_invoice',
       invoiceData: data.invoice_data || null,
       customerData: data.customer_data || null,
+      parseReport: data.parse_report || null,
     };
   }, []);
 
@@ -290,7 +291,14 @@ export default function Home() {
           return base;
         });
         setItems(prev => [...prev, ...tagged]);
-        setLoadedFiles(prev => [...prev, { id: fileId, name: file.name, count: tagged.length, status: 'ok', isOwnInvoice: result.isOwnInvoice }]);
+        setLoadedFiles(prev => [...prev, {
+          id: fileId,
+          name: file.name,
+          count: tagged.length,
+          status: 'ok',
+          isOwnInvoice: result.isOwnInvoice,
+          format: result.parseReport?.format || null,
+        }]);
         okCount += 1;
         addedItemCount += tagged.length;
 
@@ -636,7 +644,11 @@ export default function Home() {
   };
 
   // ─── Render ───────────────────────────────────────────
-  const warningsCount = items.filter(it => !it.manual && (it.source_price <= 0 || it.source_price > 500)).length;
+  // Plausibilität am aktuell gültigen Preis prüfen (inkl. manueller Korrektur
+  // über "Individuell"), nicht am unveränderlichen geparsten source_price —
+  // sonst bleibt eine Zeile für immer als "verdächtig" markiert, selbst
+  // nachdem der Preis korrigiert wurde.
+  const warningsCount = items.filter(it => !it.manual && (getEffective(it, mf).unit <= 0 || getEffective(it, mf).unit > 500)).length;
 
   return (
     <div className="app-container">
@@ -695,7 +707,13 @@ export default function Home() {
             <div key={f.id} className={`loaded-file-row ${f.status === 'error' ? 'error' : ''}`}>
               <span className="loaded-file-name">{f.name}</span>
               <span className="loaded-file-count">
-                {f.status === 'error' ? f.error : f.isOwnInvoice ? `📄 Importierte Rechnung · ${f.count} Positionen` : `${f.count} Positionen`}
+                {f.status === 'error'
+                  ? f.error
+                  : f.isOwnInvoice
+                    ? `📄 Importierte Rechnung · ${f.count} Positionen`
+                    : f.format
+                      ? `${f.count} Positionen · Format: ${f.format}`
+                      : `${f.count} Positionen`}
               </span>
               <button className="loaded-file-remove" onClick={() => removeFile(f.id)} title="Datei entfernen">🗑</button>
             </div>
@@ -897,7 +915,7 @@ export default function Home() {
                   const { ean, qty, product, unit } = getEffective(item, mf);
                   const total = qty * unit;
                   const isEditing = (field) => editCell?.rowIdx === idx && editCell?.field === field;
-                  const isWarning = !item.manual && (item.source_price <= 0 || item.source_price > 500);
+                  const isWarning = !item.manual && (unit <= 0 || unit > 500);
 
                   return (
                     <tr key={idx} className={isWarning ? 'row-warning' : ''}>
@@ -928,7 +946,7 @@ export default function Home() {
                             onBlur={commitEdit}
                             onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }} />
                         ) : product}
-                        {showOriginal && item.individual && !item.manual && (
+                        {showOriginal && !item.manual && product !== item.product && (
                           <span className="original-data" title={item.product}>Orig: {item.product}</span>
                         )}
                       </td>
@@ -950,8 +968,8 @@ export default function Home() {
                             {isWarning && <span className="warning-icon" title="Verdächtiger Originalpreis">⚠️</span>}
                           </>
                         )}
-                        {showOriginal && item.individual && !item.manual && (
-                          <span className="original-data">Orig: € {formatNumber(item.source_price)}</span>
+                        {showOriginal && !item.manual && Math.round(unit * 100) !== Math.round(item.source_price * 100) && (
+                          <span className="original-data" title="Preis aus der Quelldatei, vor Aufschlag">Orig (vor Aufschlag): € {formatNumber(item.source_price)}</span>
                         )}
                       </td>
                       <td className="text-right">{`€ ${formatNumber(total)}`}</td>

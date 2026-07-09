@@ -465,6 +465,26 @@ def _parse_znz(filepath: str) -> list[dict]:
 def parse_pdf(filepath: str) -> list[dict]:
     """
     Liest eine Lieferanten-PDF-Datei und gibt bestellte Positionen zurück.
+
+    Siehe parse_pdf_with_format() für Details zur Format-Erkennung und die
+    Rückgabe inklusive des erkannten Formatnamens.
+
+    Returns:
+        list[dict]: Liste von Positionen mit Schlüsseln:
+            - ean (str): EAN-Code (leer wenn nicht vorhanden)
+            - product (str): Produktname (bereinigt)
+            - quantity (int): Bestellmenge
+            - source_price (float): Einkaufspreis aus der Quelldatei
+    """
+    items, _format_name = parse_pdf_with_format(filepath)
+    return items
+
+
+def parse_pdf_with_format(filepath: str) -> tuple[list[dict], str]:
+    """
+    Wie parse_pdf(), gibt zusätzlich den Namen des erkannten Formats zurück
+    (z.B. für einen Parse-Bericht im Web-Frontend).
+
     Versucht zuerst die Tabellenzellen-Formate (CIPO, ALINA-Rechnung,
     ALINA-Bestellung), dann die Fließtext-Formate (MATIVA, ZNZ, FCT, PWV).
 
@@ -482,11 +502,7 @@ def parse_pdf(filepath: str) -> list[dict]:
     falsch matchender Regex überdeckt werden.
 
     Returns:
-        list[dict]: Liste von Positionen mit Schlüsseln:
-            - ean (str): EAN-Code (leer wenn nicht vorhanden)
-            - product (str): Produktname (bereinigt)
-            - quantity (int): Bestellmenge
-            - source_price (float): Einkaufspreis aus der Quelldatei
+        tuple[list[dict], str]: (Positionen, Name des erkannten Formats)
     """
     # Jeder Eintrag: (Name, Parser-Funktion, kurze Beschreibung der erwarteten Struktur)
     _PARSERS = [
@@ -535,7 +551,7 @@ def parse_pdf(filepath: str) -> list[dict]:
         items = parser_fn(filepath)
         if items:
             items.sort(key=lambda x: x["product"].lower())
-            return items
+            return items, name
         tried.append(name)
 
     # Kein Parser hat Positionen gefunden → strukturierte Fehlermeldung

@@ -270,8 +270,8 @@ def _build_error_message(searched_sheets: list[str]) -> str:
 
 # ─── .xls-Support (Legacy) ──────────────────────────────────────────
 
-def _parse_xls_legacy(filepath: str) -> list[dict]:
-    """Parst eine .xls-Datei via xlrd. Gibt dieselbe Struktur wie parse_excel() zurück."""
+def _parse_xls_legacy(filepath: str) -> tuple[list[dict], str]:
+    """Parst eine .xls-Datei via xlrd. Gibt (Positionen, Blattname) zurück."""
     if not _HAS_XLRD:
         raise ValueError(
             "Die Datei hat das ältere .xls-Format.\n"
@@ -311,7 +311,7 @@ def _parse_xls_legacy(filepath: str) -> list[dict]:
         items = _extract_items(_data_iter(), col_map)
         if items:
             items.sort(key=lambda x: x["product"].lower())
-            return items
+            return items, sheet.name
 
     raise ValueError(_build_error_message(searched_sheets))
 
@@ -322,9 +322,8 @@ def parse_excel(filepath):
     """
     Liest eine Excel-Datei (xlsx oder xls) und gibt bestellte Positionen zurück.
 
-    Durchsucht alle Tabellenblätter und bis zu 20 Zeilen pro Blatt nach
-    einer erkennbaren Kopfzeile. Unterstützt Spaltenbezeichnungen in
-    Deutsch, Englisch, Tschechisch und Polnisch.
+    Siehe parse_excel_with_sheet() für Details zur Blatt-/Header-Erkennung
+    und die Rückgabe inklusive des Blattnamens.
 
     Returns:
         list[dict]: Liste von Positionen mit Schlüsseln:
@@ -332,6 +331,23 @@ def parse_excel(filepath):
             - product (str): Gekürzter Produktname
             - quantity (int): Bestellmenge
             - source_price (float): Einkaufspreis aus der Quelldatei
+    """
+    items, _sheet_name = parse_excel_with_sheet(filepath)
+    return items
+
+
+def parse_excel_with_sheet(filepath) -> tuple[list[dict], str]:
+    """
+    Wie parse_excel(), gibt zusätzlich den Namen des Tabellenblatts zurück,
+    in dem die Kopfzeile gefunden wurde (z.B. für einen Parse-Bericht im
+    Web-Frontend).
+
+    Durchsucht alle Tabellenblätter und bis zu 20 Zeilen pro Blatt nach
+    einer erkennbaren Kopfzeile. Unterstützt Spaltenbezeichnungen in
+    Deutsch, Englisch, Tschechisch und Polnisch.
+
+    Returns:
+        tuple[list[dict], str]: (Positionen, Blattname)
     """
     ext = os.path.splitext(filepath)[1].lower()
 
@@ -375,7 +391,7 @@ def parse_excel(filepath):
 
             if items:
                 items.sort(key=lambda x: x["product"].lower())
-                return items
+                return items, ws.title
 
     finally:
         wb.close()

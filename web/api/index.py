@@ -83,11 +83,11 @@ def parse_file():
                     "invoice_data": parsed["invoice_data"],
                     "customer_data": parsed["customer_data"],
                 })
-            from src.pdf_input.parser import parse_pdf
-            items = parse_pdf(temp_path)
+            from src.pdf_input.parser import parse_pdf_with_format
+            items, detected_format = parse_pdf_with_format(temp_path)
         else:
-            from src.excel.parser import parse_excel
-            items = parse_excel(temp_path)
+            from src.excel.parser import parse_excel_with_sheet
+            items, detected_format = parse_excel_with_sheet(temp_path)
 
         result = []
         for item in items:
@@ -98,7 +98,13 @@ def parse_file():
                 "source_price": float(item.get("source_price", 0.0)),
             })
 
-        return jsonify({"items": result})
+        return jsonify({
+            "items": result,
+            "parse_report": {
+                "format": detected_format,
+                "count": len(result),
+            },
+        })
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
