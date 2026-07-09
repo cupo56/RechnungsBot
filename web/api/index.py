@@ -22,11 +22,22 @@ app = Flask(__name__)
 # only blocks direct/automated hits against the bare API URL.
 _API_SHARED_SECRET = os.environ.get("NEXT_PUBLIC_API_SHARED_SECRET")
 
+# Vercel sets VERCEL_ENV to "production" | "preview" | "development".
+# Locally (no VERCEL_ENV at all) counts as non-production too.
+_IS_PRODUCTION = os.environ.get("VERCEL_ENV") == "production"
+
 
 def _error_response(friendly, status=500, detail=None):
     body = {"error": friendly}
     if detail:
-        body["detail"] = detail
+        # Always log server-side (visible via `vercel logs`) so debugging
+        # doesn't rely on what's shown to the client.
+        print(f"[error] {friendly} | detail: {detail}", file=sys.stderr)
+        # str(exception) can contain server-internal info (e.g. the temp-file
+        # paths used for generated PDFs) - only expose it to the client
+        # outside production, where it's genuinely just a debugging aid.
+        if not _IS_PRODUCTION:
+            body["detail"] = detail
     return jsonify(body), status
 
 
