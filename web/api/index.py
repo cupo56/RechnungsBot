@@ -3,6 +3,7 @@ import sys
 import os
 import json
 import base64
+import hmac
 import tempfile
 import uuid
 
@@ -15,12 +16,31 @@ else:
 
 app = Flask(__name__)
 
+# Shared-secret gate for all routes in this app. The same value is exposed to
+# the browser via NEXT_PUBLIC_API_SHARED_SECRET (see web/app/utils/apiAuth.js),
+# so this does not stop an attacker willing to read the client bundle — it
+# only blocks direct/automated hits against the bare API URL.
+_API_SHARED_SECRET = os.environ.get("NEXT_PUBLIC_API_SHARED_SECRET")
+
 
 def _error_response(friendly, status=500, detail=None):
     body = {"error": friendly}
     if detail:
         body["detail"] = detail
     return jsonify(body), status
+
+
+@app.before_request
+def _require_shared_secret():
+    if not _API_SHARED_SECRET:
+        return _error_response(
+            "NEXT_PUBLIC_API_SHARED_SECRET ist serverseitig nicht konfiguriert.",
+            status=500,
+        )
+    auth_header = request.headers.get("Authorization", "")
+    provided = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    if not provided or not hmac.compare_digest(provided, _API_SHARED_SECRET):
+        return _error_response("Nicht autorisiert.", status=401)
 
 # --- PARSE ---
 @app.route('/api/parse', methods=['POST'])

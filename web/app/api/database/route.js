@@ -26,14 +26,14 @@ function isAllowedUrl(url) {
 export async function POST(request) {
   try {
     const body = await request.json();
-    // api_url is intentionally NOT destructured from the body.
-    // The client may still send api_key for backward compat, but it is
-    // overridden by the env var if present.
-    const { api_key: clientApiKey, action, ...data } = body;
+    // api_url and api_key are intentionally NOT taken from the client body —
+    // both must come from server-side env vars. They are still destructured
+    // out here (and discarded) so a client-supplied value can't slip through
+    // via the "...data" spread below and override the server-side one.
+    const { api_url: _clientApiUrl, api_key: _clientApiKey, action, ...data } = body;
 
-    // Server-side configuration takes precedence
     const apiUrl = process.env.DB_API_URL;
-    const apiKey = process.env.DB_API_KEY || clientApiKey;
+    const apiKey = process.env.DB_API_KEY;
 
     if (!apiUrl) {
       return NextResponse.json(
@@ -49,8 +49,13 @@ export async function POST(request) {
 
     if (!apiKey) {
       return NextResponse.json(
-        { success: false, message: 'API Key fehlt (weder in ENV noch in der Anfrage).' },
-        { status: 400 }
+        {
+          success: false,
+          message:
+            'DB_API_KEY ist nicht als Umgebungsvariable konfiguriert. ' +
+            'Bitte in den Vercel Environment Variables oder in .env.local setzen.',
+        },
+        { status: 500 }
       );
     }
 

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { saveInvoiceToDb } from '../utils/db';
+import { apiHeaders } from '../utils/apiAuth';
 
 // ─── Constants ───────────────────────────────────────────
 const CONFIG_KEY = 'rechnungsbot_config';
@@ -317,7 +318,7 @@ export default function ProvisionPage() {
     try {
       const resp = await fetch('/api/provision', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: apiHeaders(),
         body: JSON.stringify({
           items,
           invoice_data: invoiceData,

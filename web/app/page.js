@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { saveInvoiceToDb } from './utils/db';
+import { apiHeaders } from './utils/apiAuth';
 
 // ─── Constants ───────────────────────────────────────────
 const CONFIG_KEY = 'rechnungsbot_config';
@@ -215,7 +216,7 @@ export default function Home() {
 
     const resp = await fetch('/api/parse', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: apiHeaders(),
       body: JSON.stringify({ filename: file.name, file_base64: base64 }),
     });
     if (!resp.ok) {
@@ -545,7 +546,7 @@ export default function Home() {
     try {
       const resp = await fetch('/api/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: apiHeaders(),
         body: JSON.stringify({
           mode,
           items: invoiceItems,
