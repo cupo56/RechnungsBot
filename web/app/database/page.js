@@ -6,8 +6,6 @@ import { useState, useEffect, useCallback } from 'react';
 const CONFIG_KEY = 'rechnungsbot_config';
 
 const DEFAULT_CONFIG = {
-  db_api_url: '',
-  db_api_key: '',
   db_enabled: false,
 };
 
@@ -31,7 +29,16 @@ function loadConfig() {
   try {
     const stored = localStorage.getItem(CONFIG_KEY);
     if (stored) {
-      return { ...DEFAULT_CONFIG, ...JSON.parse(stored) };
+      const parsed = JSON.parse(stored);
+      // Migration: eine ältere Version speicherte den API-Key im Klartext in
+      // localStorage. Falls noch vorhanden, sofort entfernen und persistieren,
+      // statt nur zukünftige Speicherungen zu vermeiden.
+      if ('db_api_key' in parsed || 'db_api_url' in parsed) {
+        delete parsed.db_api_key;
+        delete parsed.db_api_url;
+        try { localStorage.setItem(CONFIG_KEY, JSON.stringify(parsed)); } catch { /* ignore */ }
+      }
+      return { ...DEFAULT_CONFIG, ...parsed };
     }
   } catch { /* ignore */ }
   return { ...DEFAULT_CONFIG };
@@ -53,8 +60,6 @@ function formatNumber(val) {
 export default function DatabasePage() {
   // --- State: Config ---
   const [config, setConfig] = useState(DEFAULT_CONFIG);
-  const [apiUrl, setApiUrl] = useState('');
-  const [apiKey, setApiKey] = useState('');
   const [settingsVisible, setSettingsVisible] = useState(false);
   
   // --- State: Data ---
@@ -79,27 +84,18 @@ export default function DatabasePage() {
   useEffect(() => {
     const cfg = loadConfig();
     setConfig(cfg);
-    setApiUrl(cfg.db_api_url || '');
-    setApiKey(cfg.db_api_key || '');
-
-    if (cfg.db_api_key) {
-      testConnectionAndLoad(cfg.db_api_key);
-    } else {
-      setStatus({ text: '⚠ Keine API konfiguriert — klicke auf ⚙ API-Einstellungen', type: 'warning' });
-      setSettingsVisible(true);
-    }
+    testConnectionAndLoad();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── API Calls ────────────────────────────────────────
-  const callApi = async (action, data = {}, key = apiKey) => {
-    if (!key) {
-      throw new Error("API-Key fehlt.");
-    }
+  // URL und API-Key werden ausschließlich serverseitig (DB_API_URL/DB_API_KEY)
+  // verwaltet — der Client schickt und speichert keine Zugangsdaten mehr.
+  const callApi = async (action, data = {}) => {
     const res = await fetch('/api/database', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: key, action, ...data }),
+      body: JSON.stringify({ action, ...data }),
     });
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
@@ -107,13 +103,17 @@ export default function DatabasePage() {
     return res.json();
   };
 
-  const testConnectionAndLoad = async (key = apiKey) => {
+  const testConnectionAndLoad = async () => {
     setStatus({ text: '⏳ Verbindung wird getestet…', type: 'loading' });
     try {
-      const res = await callApi('test', {}, key);
+      const res = await callApi('test');
       if (res.success) {
         setStatus({ text: `✅ Verbunden — ${res.message || 'OK'}`, type: 'success' });
-        loadInvoices(key);
+        if (!config.db_enabled) {
+          saveConfig({ db_enabled: true });
+          setConfig(prev => ({ ...prev, db_enabled: true }));
+        }
+        loadInvoices();
       } else {
         setStatus({ text: `❌ Fehler: ${res.message}`, type: 'error' });
       }
@@ -122,14 +122,14 @@ export default function DatabasePage() {
     }
   };
 
-  const loadInvoices = async (key = apiKey) => {
+  const loadInvoices = async () => {
     setLoading(true);
     try {
       const data = {};
       if (search.trim()) data.search = search.trim();
       if (docFilter !== 'alle') data.doc_type = docFilter;
-      
-      const res = await callApi('list', data, key);
+
+      const res = await callApi('list', data);
       if (res.success) {
         setInvoices(res.invoices || []);
       } else {
@@ -181,30 +181,16 @@ export default function DatabasePage() {
     }
   };
 
-  const handleSaveSettings = async () => {
-    const key = apiKey.trim();
-    
-    if (!key) {
-      setToast({ text: '⚠️ API-Key darf nicht leer sein.', type: 'error' });
-      return;
-    }
-
+  const initDatabase = async () => {
     setStatus({ text: '⏳ Initialisiere Datenbank…', type: 'loading' });
-    
     try {
-      // Init attempt
-      const resInit = await callApi('init', {}, key);
+      const resInit = await callApi('init');
       if (!resInit.success && !resInit.message?.includes('existiert bereits')) {
         setStatus({ text: `❌ Initialisierung fehlgeschlagen: ${resInit.message}`, type: 'error' });
         return;
       }
-      
-      saveConfig({ db_api_key: key, db_enabled: true });
-      setConfig(prev => ({ ...prev, db_api_key: key, db_enabled: true }));
-      setSettingsVisible(false);
-      setToast({ text: '💾 Einstellungen gespeichert.', type: 'success' });
-      
-      testConnectionAndLoad(key);
+      setToast({ text: '✅ Datenbank initialisiert.', type: 'success' });
+      testConnectionAndLoad();
     } catch (err) {
       setStatus({ text: `❌ Verbindungsfehler: ${err.message}`, type: 'error' });
     }
@@ -246,24 +232,20 @@ export default function DatabasePage() {
       {settingsVisible && (
         <div className="panel" style={{ marginBottom: 16 }}>
           <h2 className="panel-title">API-Einstellungen (World4You)</h2>
-          
+
           <div style={{ backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#1E40AF' }}>
-            ℹ️ Die <strong>API-URL</strong> wird aus der serverseitigen Umgebungsvariable <code>DB_API_URL</code> gelesen
-            (Vercel Environment Variables oder <code>.env.local</code>).
+            ℹ️ <strong>API-URL</strong> und <strong>API-Key</strong> werden ausschließlich aus den serverseitigen
+            Umgebungsvariablen <code>DB_API_URL</code> / <code>DB_API_KEY</code> gelesen (Vercel Environment
+            Variables oder <code>.env.local</code>) — der Browser speichert oder verschickt keine Zugangsdaten mehr.
           </div>
 
-          <div className="form-group" style={{ gridTemplateColumns: '80px 1fr' }}>
-            <label className="form-label" htmlFor="apiKey">API-Key:</label>
-            <input id="apiKey" className="form-input" type="password" value={apiKey}
-              onChange={e => setApiKey(e.target.value)} />
-          </div>
-          
           <p className="text-muted" style={{ fontSize: 13, marginBottom: 16 }}>
-            Die PHP-Dateien müssen auf deinen World4You-Webspace hochgeladen werden.
+            Die PHP-Dateien müssen auf deinen World4You-Webspace hochgeladen werden. Beim ersten Einrichten
+            (oder nach einem Schema-Update) einmalig initialisieren:
           </p>
 
-          <button className="btn btn-primary" onClick={handleSaveSettings}>
-            💾 Speichern & Verbinden
+          <button className="btn btn-primary" onClick={initDatabase}>
+            🔧 Datenbank initialisieren
           </button>
         </div>
       )}
