@@ -173,6 +173,11 @@ export default function EndkundePage() {
       girocode_enabled: girocodeEnabled,
       weight: weight.trim(),
       delivery_note_text: deliveryNoteText.trim(),
+      // Endkunden sind Privatpersonen im Inland, keine steuerfreie
+      // innergemeinschaftliche Lieferung — eu_text_enabled defaultet in
+      // invoice.py sonst auf true und würde fälschlich den EU-Freistellungs-
+      // hinweis auf jede Endkunden-Rechnung drucken.
+      eu_text_enabled: false,
     };
 
     const customerData = {
