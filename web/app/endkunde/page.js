@@ -34,6 +34,12 @@ const DEFAULT_CONFIG = {
 
 const loadConfig = () => loadConfigBase(DEFAULT_CONFIG);
 
+// Endkunden-Rechnungen/-Lieferscheine sind Kaufland-Marktplatzverkäufe und
+// bereits bezahlt — dieser Hinweis ersetzt (Rechnung) bzw. ergänzt
+// (Lieferschein) den Standard-Fußtext, damit niemand fälschlich noch einmal
+// überweist.
+const KAUFLAND_PAYMENT_NOTE = 'Leistungsdatum ist gleich dem Rechnungsdatum.\nDer Rechnungsbetrag wurde bereits über Kaufland beglichen.\nBitte überweisen Sie keinen Betrag an das unten stehende Konto.';
+
 // ─── Main Page Component ─────────────────────────────────
 export default function EndkundePage() {
   // --- State: Config / Settings ---
@@ -172,12 +178,16 @@ export default function EndkundePage() {
       ust_percent: ustPct,
       girocode_enabled: girocodeEnabled,
       weight: weight.trim(),
-      delivery_note_text: deliveryNoteText.trim(),
-      // Endkunden-Rechnungen werden über Kaufland verkauft und sind bereits
-      // bezahlt — der Standard-Fußtext (EU-Freistellung / Mahnspesen-Hinweis)
-      // passt nicht. invoice_note_text ersetzt in invoice.py den kompletten
-      // Fußtext-Block (inkl. eu_text_enabled, das dadurch nicht mehr greift).
-      invoice_note_text: 'Leistungsdatum ist gleich dem Rechnungsdatum.\nDer Rechnungsbetrag wurde bereits über Kaufland beglichen.\nBitte überweisen Sie keinen Betrag an das unten stehende Konto.',
+      // Eigene Lieferschein-Notiz (falls ausgefüllt) bleibt erhalten, der
+      // Kaufland-Hinweis wird immer angehängt.
+      delivery_note_text: deliveryNoteText.trim()
+        ? `${deliveryNoteText.trim()}\n${KAUFLAND_PAYMENT_NOTE}`
+        : KAUFLAND_PAYMENT_NOTE,
+      // invoice_note_text ersetzt in invoice.py den kompletten Fußtext-Block
+      // (inkl. eu_text_enabled, das dadurch nicht mehr greift) — passend, da
+      // der Standard-Fußtext (EU-Freistellung / Mahnspesen-Hinweis) für
+      // bereits über Kaufland bezahlte Endkunden-Rechnungen nicht passt.
+      invoice_note_text: KAUFLAND_PAYMENT_NOTE,
     };
 
     const customerData = {
