@@ -15,6 +15,7 @@ import SimpleItemsPanel from '../components/SimpleItemsPanel';
 // ─── Constants ───────────────────────────────────────────
 const DEFAULT_CONFIG = {
   last_credit_note_number: '',
+  db_enabled: true,
   default_credit_note_ust_enabled: true,
   default_credit_note_ust_percent: 20.0,
   default_credit_note_girocode_enabled: true,

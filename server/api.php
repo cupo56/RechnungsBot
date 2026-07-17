@@ -87,7 +87,8 @@ switch ($action) {
                     invoice_number  VARCHAR(50)  NOT NULL,
                     invoice_date    VARCHAR(20)  NOT NULL,
                     document_type   VARCHAR(30)  NOT NULL DEFAULT 'rechnung',
-                    customer_name   VARCHAR(255) NOT NULL,
+                    is_endkunde     TINYINT(1)   NOT NULL DEFAULT 0,
+                    customer_name   VARCHAR(255) NOT NULL DEFAULT '',
                     customer_street VARCHAR(255) DEFAULT '',
                     customer_plz    VARCHAR(100) DEFAULT '',
                     customer_country VARCHAR(100) DEFAULT '',
@@ -103,9 +104,29 @@ switch ($action) {
                     INDEX idx_invoice_number (invoice_number),
                     INDEX idx_customer_name  (customer_name),
                     INDEX idx_invoice_date   (invoice_date),
-                    INDEX idx_created_at     (created_at)
+                    INDEX idx_created_at     (created_at),
+                    INDEX idx_is_endkunde    (is_endkunde)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             ");
+
+            // Schema-Update für bereits bestehende Installationen (Tabelle
+            // existierte schon vor der is_endkunde-Spalte) — Fehler bei
+            // bereits vorhandener Spalte wird bewusst verschluckt.
+            try {
+                $pdo->exec("ALTER TABLE invoices ADD COLUMN is_endkunde TINYINT(1) NOT NULL DEFAULT 0");
+                $pdo->exec("ALTER TABLE invoices ADD INDEX idx_is_endkunde (is_endkunde)");
+            } catch (PDOException $e) {
+                // Spalte/Index existiert bereits — kein Fehler.
+            }
+            // Ältere Installationen hatten customer_name als NOT NULL ohne
+            // Default — Endkunden-Rechnungen dürfen aber ohne Kundennamen
+            // gespeichert werden.
+            try {
+                $pdo->exec("ALTER TABLE invoices MODIFY customer_name VARCHAR(255) NOT NULL DEFAULT ''");
+            } catch (PDOException $e) {
+                // Bereits passend — kein Fehler.
+            }
+
             echo json_encode(['success' => true, 'message' => 'Datenbank initialisiert.']);
         } catch (PDOException $e) {
             echo json_encode(['success' => false, 'message' => 'Init fehlgeschlagen: ' . $e->getMessage()]);
@@ -115,7 +136,9 @@ switch ($action) {
     // ── Rechnung speichern ────────────────────────────────────
     case 'save':
         try {
-            $required = ['invoice_number', 'invoice_date', 'customer_name', 'pdf_filename', 'pdf_data'];
+            // customer_name ist bewusst kein Pflichtfeld mehr: Endkunden-
+            // Rechnungen (/endkunde) erlauben leere Kundendaten.
+            $required = ['invoice_number', 'invoice_date', 'pdf_filename', 'pdf_data'];
             foreach ($required as $field) {
                 if (empty($input[$field])) {
                     echo json_encode(['success' => false, 'message' => "Pflichtfeld fehlt: $field"]);
@@ -132,19 +155,20 @@ switch ($action) {
 
             $stmt = $pdo->prepare("
                 INSERT INTO invoices
-                    (invoice_number, invoice_date, document_type,
+                    (invoice_number, invoice_date, document_type, is_endkunde,
                      customer_name, customer_street, customer_plz,
                      customer_country, customer_vat,
                      total_netto, total_brutto, ust_percent,
                      item_count, is_export, pdf_filename, pdf_data)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
 
             $stmt->execute([
                 $input['invoice_number'],
                 $input['invoice_date'],
                 $input['document_type'] ?? 'rechnung',
-                $input['customer_name'],
+                intval($input['is_endkunde'] ?? 0),
+                $input['customer_name'] ?? '',
                 $input['customer_street'] ?? '',
                 $input['customer_plz'] ?? '',
                 $input['customer_country'] ?? '',
@@ -169,7 +193,7 @@ switch ($action) {
     // ── Rechnungsliste abrufen ────────────────────────────────
     case 'list':
         try {
-            $sql = "SELECT id, invoice_number, invoice_date, document_type,
+            $sql = "SELECT id, invoice_number, invoice_date, document_type, is_endkunde,
                            customer_name, total_netto, total_brutto, ust_percent,
                            item_count, is_export, pdf_filename, created_at
                     FROM invoices WHERE 1=1";
@@ -183,8 +207,16 @@ switch ($action) {
             }
 
             if (!empty($input['doc_type']) && $input['doc_type'] !== 'alle') {
-                $sql .= " AND document_type = ?";
-                $params[] = $input['doc_type'];
+                if ($input['doc_type'] === 'endkunde') {
+                    // Eigene Filterdimension, kein document_type-Wert: eine
+                    // Endkunden-Rechnung behält document_type 'rechnung'/
+                    // 'lieferschein' und taucht dadurch weiterhin auch unter
+                    // diesen Tabs auf, zusätzlich zum Endkunde-Tab.
+                    $sql .= " AND is_endkunde = 1";
+                } else {
+                    $sql .= " AND document_type = ?";
+                    $params[] = $input['doc_type'];
+                }
             }
 
             $sql .= " ORDER BY created_at DESC LIMIT 500";
@@ -200,6 +232,7 @@ switch ($action) {
                 $row['ust_percent'] = floatval($row['ust_percent']);
                 $row['item_count'] = intval($row['item_count']);
                 $row['is_export'] = intval($row['is_export']);
+                $row['is_endkunde'] = intval($row['is_endkunde']);
                 $row['id'] = intval($row['id']);
             }
 

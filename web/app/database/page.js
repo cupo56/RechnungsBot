@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 const CONFIG_KEY = 'rechnungsbot_config';
 
 const DEFAULT_CONFIG = {
-  db_enabled: false,
+  db_enabled: true,
 };
 
 const DOC_TYPES = {
@@ -15,6 +15,7 @@ const DOC_TYPES = {
   'lieferschein': '📦 Lieferscheine',
   'provision': '💰 Provisionsrechnungen',
   'gutschrift': '🧾 Gutschriften',
+  'endkunde': '🧍 Endkunde',
 };
 
 const DOC_TYPE_LABELS = {

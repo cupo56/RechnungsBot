@@ -22,6 +22,7 @@ import ManualInvoiceItemsPanel from '../components/ManualInvoiceItemsPanel';
 const DEFAULT_CONFIG = {
   last_invoice_number: 1,
   last_invoice_year: 2026,
+  db_enabled: true,
   default_endkunde_ust_enabled: false,
   default_endkunde_ust_percent: 20.0,
   default_endkunde_girocode_enabled: true,
@@ -244,6 +245,7 @@ export default function EndkundePage() {
           totals: { netto: totalNetto, brutto: totalBrutto },
           itemCount: invoiceItems.length,
           docType: 'rechnung',
+          isEndkunde: true,
           pdfBase64: data.invoice_pdf,
           pdfFilename: data.invoice_filename || `Rechnung_${invoiceNr.replace('/', '_')}.pdf`,
         });
@@ -256,6 +258,7 @@ export default function EndkundePage() {
           totals: { netto: 0, brutto: 0 },
           itemCount: invoiceItems.length,
           docType: 'lieferschein',
+          isEndkunde: true,
           pdfBase64: data.delivery_pdf,
           pdfFilename: data.delivery_filename || `Lieferschein_${invoiceNr.replace('/', '_')}.pdf`,
         });

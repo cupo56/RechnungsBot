@@ -16,6 +16,7 @@ import SimpleItemsPanel from '../components/SimpleItemsPanel';
 const DEFAULT_CONFIG = {
   last_provision_number: 1,
   last_provision_year: 2026,
+  db_enabled: true,
   default_provision_ust_enabled: true,
   default_provision_ust_percent: 20.0,
   default_provision_girocode_enabled: true,

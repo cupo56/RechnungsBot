@@ -18,6 +18,7 @@ import ItemsTable from './components/ItemsTable';
 const DEFAULT_CONFIG = {
   last_invoice_number: 1,
   last_invoice_year: 2026,
+  db_enabled: true,
   default_markup: 0.0,
   default_ust_enabled: false,
   default_ust_percent: 20.0,

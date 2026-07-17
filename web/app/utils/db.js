@@ -9,6 +9,7 @@ export async function saveInvoiceToDb({
   totals, // { netto, brutto }
   itemCount,
   docType, // 'rechnung', 'lieferschein', 'provision', 'gutschrift'
+  isEndkunde = false, // zusätzliches Filter-Flag fürs Archiv, document_type bleibt unverändert
   pdfBase64,
   pdfFilename
 }) {
@@ -18,10 +19,11 @@ export async function saveInvoiceToDb({
 
   const payload = {
     action: 'save',
-    
+
     invoice_number: invoiceData.number || '',
     invoice_date: invoiceData.date || '',
     document_type: docType,
+    is_endkunde: isEndkunde ? 1 : 0,
     customer_name: customerData.name || '',
     customer_street: customerData.street || '',
     customer_plz: customerData.plz_city || '',
