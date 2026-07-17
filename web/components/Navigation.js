@@ -11,6 +11,7 @@ export default function Navigation() {
     { href: '/compare', label: '🔍 Vergleich', desc: 'Excel-Listen abgleichen' },
     { href: '/provision', label: '💰 Provision', desc: 'Abrechnung erstellen' },
     { href: '/credit-note', label: '↩️ Gutschrift', desc: 'Stornos & Gutschriften' },
+    { href: '/endkunde', label: '🧍 Endkunde', desc: 'Rechnung für Endkunden manuell erstellen' },
     { href: '/database', label: '🗄️ Datenbank', desc: 'Archiv & Suche' },
   ];
 
