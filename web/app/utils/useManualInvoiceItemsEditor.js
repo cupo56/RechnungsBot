@@ -64,7 +64,7 @@ export function useManualInvoiceItemsEditor({ items, setItems, setToast }) {
 
   const deleteItem = (idx) => {
     const label = items[idx]?.product || '';
-    if (confirm(`Soll die Position „${label}" wirklich entfernt werden?`)) {
+    if (confirm(`Soll die Position „${label}“ wirklich entfernt werden?`)) {
       setItems(prev => prev.filter((_, i) => i !== idx));
     }
   };
