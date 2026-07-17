@@ -173,11 +173,11 @@ export default function EndkundePage() {
       girocode_enabled: girocodeEnabled,
       weight: weight.trim(),
       delivery_note_text: deliveryNoteText.trim(),
-      // Endkunden sind Privatpersonen im Inland, keine steuerfreie
-      // innergemeinschaftliche Lieferung — eu_text_enabled defaultet in
-      // invoice.py sonst auf true und würde fälschlich den EU-Freistellungs-
-      // hinweis auf jede Endkunden-Rechnung drucken.
-      eu_text_enabled: false,
+      // Endkunden-Rechnungen werden über Kaufland verkauft und sind bereits
+      // bezahlt — der Standard-Fußtext (EU-Freistellung / Mahnspesen-Hinweis)
+      // passt nicht. invoice_note_text ersetzt in invoice.py den kompletten
+      // Fußtext-Block (inkl. eu_text_enabled, das dadurch nicht mehr greift).
+      invoice_note_text: 'Leistungsdatum ist gleich dem Rechnungsdatum.\nDer Rechnungsbetrag wurde bereits über Kaufland beglichen. Bitte überweisen Sie keinen Betrag an das unten stehende Konto.',
     };
 
     const customerData = {
