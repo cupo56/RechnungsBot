@@ -177,7 +177,7 @@ export default function EndkundePage() {
       // bezahlt — der Standard-Fußtext (EU-Freistellung / Mahnspesen-Hinweis)
       // passt nicht. invoice_note_text ersetzt in invoice.py den kompletten
       // Fußtext-Block (inkl. eu_text_enabled, das dadurch nicht mehr greift).
-      invoice_note_text: 'Leistungsdatum ist gleich dem Rechnungsdatum.\nDer Rechnungsbetrag wurde bereits über Kaufland beglichen. Bitte überweisen Sie keinen Betrag an das unten stehende Konto.',
+      invoice_note_text: 'Leistungsdatum ist gleich dem Rechnungsdatum.\nDer Rechnungsbetrag wurde bereits über Kaufland beglichen.\nBitte überweisen Sie keinen Betrag an das unten stehende Konto.',
     };
 
     const customerData = {
