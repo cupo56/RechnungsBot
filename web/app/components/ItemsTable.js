@@ -1,6 +1,7 @@
 'use client';
 
 import { formatCurrency, formatNumber } from '../utils/format';
+import { AlertTriangle, Plus, ClipboardList, Trash2 } from 'lucide-react';
 
 export default function ItemsTable({
   items, mf, getEffective,
@@ -16,8 +17,9 @@ export default function ItemsTable({
   return (
     <>
       {warningsCount > 0 && (
-        <div className="toast-error" style={{ position: 'relative', marginBottom: '16px', borderRadius: '4px', padding: '12px' }}>
-          ⚠️ {warningsCount} Position(en) haben einen verdächtigen Preis (0 € oder &gt; 500 €). Bitte prüfe diese Positionen manuell.
+        <div className="toast-error" style={{ position: 'relative', marginBottom: '16px', borderRadius: '4px', padding: '12px', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <AlertTriangle size={16} strokeWidth={2} style={{ flexShrink: 0, marginTop: 2 }} />
+          <span>{warningsCount} Position(en) haben einen verdächtigen Preis (0 € oder &gt; 500 €). Bitte prüfe diese Positionen manuell.</span>
         </div>
       )}
       <div className="table-section" id="table-section">
@@ -40,14 +42,14 @@ export default function ItemsTable({
             </span>
           </div>
           <button className="btn btn-secondary btn-sm" onClick={addManualRow} id="btn-add-row">
-            ➕ Neue Zeile
+            <Plus size={14} strokeWidth={2} /> Neue Zeile
           </button>
         </div>
 
         <div className="table-wrapper">
           {items.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-state-icon">📋</div>
+              <div className="empty-state-icon"><ClipboardList size={40} strokeWidth={1.5} /></div>
               <p className="empty-state-text">Noch keine Positionen geladen. Bitte oben eine Datei hochladen.</p>
             </div>
           ) : (
@@ -119,7 +121,7 @@ export default function ItemsTable({
                         ) : (
                           <>
                             € {formatNumber(unit)}
-                            {isWarning && <span className="warning-icon" title="Verdächtiger Originalpreis">⚠️</span>}
+                            {isWarning && <span className="warning-icon" title="Verdächtiger Originalpreis"><AlertTriangle size={13} strokeWidth={2} /></span>}
                           </>
                         )}
                         {showOriginal && !item.manual && Math.round(unit * 100) !== Math.round(item.source_price * 100) && (
@@ -129,7 +131,7 @@ export default function ItemsTable({
                       <td className="text-right">{`€ ${formatNumber(total)}`}</td>
                       {ustEnabled && <td className="text-center">{ustPct}%</td>}
                       <td className="text-center">
-                        <button className="table-delete-btn" onClick={() => deleteItem(idx)} title="Position entfernen">🗑</button>
+                        <button className="table-delete-btn" onClick={() => deleteItem(idx)} title="Position entfernen"><Trash2 size={15} strokeWidth={2} /></button>
                       </td>
                     </tr>
                   );

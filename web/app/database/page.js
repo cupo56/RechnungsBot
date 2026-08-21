@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { Database, RefreshCw, Plug, Settings, Wrench, Search, Info, Download, Trash2 } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────
 const CONFIG_KEY = 'rechnungsbot_config';
@@ -203,7 +204,7 @@ export default function DatabasePage() {
       {/* ── Header ── */}
       <header className="app-header" id="app-header">
         <div className="header-content">
-          <h1 className="header-title">🗄️ Datenbank</h1>
+          <h1 className="header-title"><Database size={26} strokeWidth={2} className="header-title-icon" /> Datenbank</h1>
           <p className="header-subtitle">Alle erstellten Dokumente – in der World4You-Datenbank gespeichert</p>
         </div>
       </header>
@@ -218,13 +219,13 @@ export default function DatabasePage() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-secondary btn-sm" onClick={() => loadInvoices()} disabled={loading}>
-            ↻ Aktualisieren
+            <RefreshCw size={14} strokeWidth={2} /> Aktualisieren
           </button>
           <button className="btn btn-secondary btn-sm" onClick={() => testConnectionAndLoad()} disabled={loading}>
-            🔌 Verbindung testen
+            <Plug size={14} strokeWidth={2} /> Verbindung testen
           </button>
           <button className="btn btn-secondary btn-sm" onClick={() => setSettingsVisible(!settingsVisible)}>
-            ⚙ API-Einstellungen
+            <Settings size={14} strokeWidth={2} /> API-Einstellungen
           </button>
         </div>
       </div>
@@ -234,10 +235,11 @@ export default function DatabasePage() {
         <div className="panel" style={{ marginBottom: 16 }}>
           <h2 className="panel-title">API-Einstellungen (World4You)</h2>
 
-          <div style={{ backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#1E40AF' }}>
-            ℹ️ <strong>API-URL</strong> und <strong>API-Key</strong> werden ausschließlich aus den serverseitigen
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#1E40AF' }}>
+            <Info size={16} strokeWidth={2} style={{ flexShrink: 0, marginTop: 2 }} />
+            <span><strong>API-URL</strong> und <strong>API-Key</strong> werden ausschließlich aus den serverseitigen
             Umgebungsvariablen <code>DB_API_URL</code> / <code>DB_API_KEY</code> gelesen (Vercel Environment
-            Variables oder <code>.env.local</code>) — der Browser speichert oder verschickt keine Zugangsdaten mehr.
+            Variables oder <code>.env.local</code>) — der Browser speichert oder verschickt keine Zugangsdaten mehr.</span>
           </div>
 
           <p className="text-muted" style={{ fontSize: 13, marginBottom: 16 }}>
@@ -246,7 +248,7 @@ export default function DatabasePage() {
           </p>
 
           <button className="btn btn-primary" onClick={initDatabase}>
-            🔧 Datenbank initialisieren
+            <Wrench size={16} strokeWidth={2} /> Datenbank initialisieren
           </button>
         </div>
       )}
@@ -272,7 +274,7 @@ export default function DatabasePage() {
           ))}
         </select>
         <button className="btn btn-primary" onClick={() => loadInvoices()}>
-          🔍 Suchen
+          <Search size={16} strokeWidth={2} /> Suchen
         </button>
         <span className="text-muted" style={{ marginLeft: 'auto', fontSize: 13 }}>
           {invoices.length} Dokument{invoices.length !== 1 ? 'e' : ''} gefunden
@@ -284,7 +286,7 @@ export default function DatabasePage() {
         <div className="table-wrapper" style={{ maxHeight: '500px' }}>
           {invoices.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-state-icon">🗄️</div>
+              <div className="empty-state-icon"><Database size={40} strokeWidth={1.5} /></div>
               <p className="empty-state-text">
                 {loading ? 'Lade Daten...' : 'Keine Dokumente im Archiv gefunden.'}
               </p>
@@ -329,15 +331,15 @@ export default function DatabasePage() {
                             title="PDF Herunterladen"
                             onClick={() => downloadPdf(inv.id, inv.pdf_filename)}
                           >
-                            📥
+                            <Download size={14} strokeWidth={2} />
                           </button>
-                          <button 
-                            className="btn btn-icon btn-sm" 
+                          <button
+                            className="btn btn-icon btn-sm"
                             style={{ color: '#C0392B', borderColor: '#FECACA', backgroundColor: '#FEE2E2' }}
                             title="Dokument löschen"
                             onClick={() => deleteInvoice(inv.id, inv.invoice_number, inv.customer_name)}
                           >
-                            🗑
+                            <Trash2 size={14} strokeWidth={2} />
                           </button>
                         </div>
                       </td>

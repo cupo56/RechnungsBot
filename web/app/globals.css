@@ -150,11 +150,19 @@ body {
 }
 
 .header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.02em;
   line-height: 1.2;
+}
+
+.header-title-icon {
+  color: var(--primary-600);
+  flex-shrink: 0;
 }
 
 .header-subtitle {
@@ -1074,7 +1082,9 @@ body {
 .warning-icon {
   margin-left: 4px;
   cursor: help;
-  font-size: 0.9em;
+  display: inline-flex;
+  vertical-align: -3px;
+  color: var(--warning-500);
 }
 
 .original-data {

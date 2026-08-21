@@ -11,6 +11,7 @@ import Toast from '../components/Toast';
 import TemplateSelector from '../components/TemplateSelector';
 import StatusBar from '../components/StatusBar';
 import SimpleItemsPanel from '../components/SimpleItemsPanel';
+import { Wallet, RotateCcw, Receipt, Settings, User } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────
 const DEFAULT_CONFIG = {
@@ -209,13 +210,13 @@ export default function ProvisionPage() {
       {/* ── Header ── */}
       <header className="app-header" id="app-header">
         <div className="header-content">
-          <h1 className="header-title">💰 Provisionsrechnung</h1>
+          <h1 className="header-title"><Wallet size={26} strokeWidth={2} className="header-title-icon" /> Provisionsrechnung</h1>
           <p className="header-subtitle">Provisionsrechnungen für Vermittlungsgeschäfte manuell erfassen und generieren</p>
         </div>
         <div className="header-actions">
           {items.length > 0 && (
             <button className="btn btn-secondary" onClick={resetSession}>
-              ↺ Neue Provisionsrechnung
+              <RotateCcw size={16} strokeWidth={2} /> Neue Provisionsrechnung
             </button>
           )}
         </div>
@@ -226,7 +227,7 @@ export default function ProvisionPage() {
         {/* Settings Panel */}
         <div className="panel" id="panel-settings">
           <h2 className="panel-title">
-            <span className="panel-title-icon">⚙️</span> Einstellungen
+            <Settings size={16} strokeWidth={2} /> Einstellungen
           </h2>
 
           <div className="form-group">
@@ -266,7 +267,7 @@ export default function ProvisionPage() {
         {/* Customer Panel */}
         <div className="panel" id="panel-customer">
           <h2 className="panel-title">
-            <span className="panel-title-icon">👤</span> Empfänger
+            <User size={16} strokeWidth={2} /> Empfänger
           </h2>
 
           <TemplateSelector
@@ -327,7 +328,7 @@ export default function ProvisionPage() {
           onClick={generateInvoice}
           disabled={generating || !items.length}
         >
-          {generating ? <span className="spinner"></span> : '📑'} Provisionsrechnung erstellen
+          {generating ? <span className="spinner"></span> : <Receipt size={16} strokeWidth={2} />} Provisionsrechnung erstellen
         </button>
       </div>
 

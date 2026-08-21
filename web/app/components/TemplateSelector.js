@@ -1,5 +1,7 @@
 'use client';
 
+import { Save, Trash2 } from 'lucide-react';
+
 export default function TemplateSelector({ templateNames, selectedTemplate, onSelect, onSave, onDelete }) {
   return (
     <div className="template-row">
@@ -9,8 +11,8 @@ export default function TemplateSelector({ templateNames, selectedTemplate, onSe
         <option value="">— Vorlage wählen —</option>
         {templateNames.map(n => <option key={n} value={n}>{n}</option>)}
       </select>
-      <button className="btn btn-secondary btn-sm" onClick={onSave} title="Speichern">💾</button>
-      <button className="btn btn-icon btn-sm" onClick={onDelete} title="Löschen">🗑</button>
+      <button className="btn btn-secondary btn-sm" onClick={onSave} title="Speichern"><Save size={14} strokeWidth={2} /></button>
+      <button className="btn btn-icon btn-sm" onClick={onDelete} title="Löschen"><Trash2 size={14} strokeWidth={2} /></button>
     </div>
   );
 }

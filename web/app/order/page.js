@@ -5,6 +5,7 @@ import { apiHeaders } from '../utils/apiAuth';
 import { useToast } from '../utils/useToast';
 import Toast from '../components/Toast';
 import StatusBar from '../components/StatusBar';
+import { Link as LinkIcon, RotateCcw, Download, ClipboardList, Package, CheckCircle2 } from 'lucide-react';
 
 // Anders als beim Haupt-Upload (web/app/page.js, ein File pro Request) werden
 // hier BEIDE Dateien in einem einzigen Request an /api/order/apply gesendet,
@@ -18,7 +19,7 @@ async function fileToBase64(file) {
   return btoa(Array.from(new Uint8Array(buffer), (b) => String.fromCharCode(b)).join(''));
 }
 
-function UploadBox({ icon, title, hint, filename, onFileChange, inputId }) {
+function UploadBox({ icon: Icon, title, hint, filename, onFileChange, inputId }) {
   return (
     <div
       className={`drop-zone ${filename ? 'loaded' : ''}`}
@@ -26,7 +27,9 @@ function UploadBox({ icon, title, hint, filename, onFileChange, inputId }) {
       onDrop={(e) => e.preventDefault()}
     >
       <label htmlFor={inputId} style={{ cursor: 'pointer', display: 'block' }}>
-        <span className="drop-zone-icon">{filename ? '✅' : icon}</span>
+        <span className="drop-zone-icon">
+          {filename ? <CheckCircle2 size={40} strokeWidth={1.5} /> : <Icon size={40} strokeWidth={1.5} />}
+        </span>
         <p className="drop-zone-text">{filename ? `${title}: ${filename}` : title}</p>
         {!filename && <p className="drop-zone-hint">{hint}</p>}
       </label>
@@ -134,13 +137,13 @@ export default function OrderPage() {
     <div className="app-container">
       <header className="app-header">
         <div className="header-content">
-          <h1 className="header-title">🔗 OrderBot</h1>
+          <h1 className="header-title"><LinkIcon size={26} strokeWidth={2} className="header-title-icon" /> OrderBot</h1>
           <p className="header-subtitle">Bestellmengen per EAN in eine Ziel-Liste übernehmen</p>
         </div>
         <div className="header-actions">
           {(sourceFile || targetFile || result) && (
             <button className="btn btn-secondary" onClick={handleReset}>
-              ↺ Neue Order-Prüfung
+              <RotateCcw size={16} strokeWidth={2} /> Neue Order-Prüfung
             </button>
           )}
         </div>
@@ -148,7 +151,7 @@ export default function OrderPage() {
 
       <div className="panels-row">
         <UploadBox
-          icon="📋"
+          icon={ClipboardList}
           title="Bestellliste laden"
           hint="EAN + Order-Menge  (.xlsx)"
           filename={sourceFile?.filename}
@@ -156,7 +159,7 @@ export default function OrderPage() {
           onFileChange={handleFileChange(setSourceFile)}
         />
         <UploadBox
-          icon="📦"
+          icon={Package}
           title="Ziel-Liste laden"
           hint="mit EAN-Spalte  (.xlsx)"
           filename={targetFile?.filename}
@@ -171,7 +174,7 @@ export default function OrderPage() {
           disabled={!sourceFile || !targetFile || applying}
           onClick={handleApply}
         >
-          {applying ? 'Wird abgeglichen…' : '🔗 Order anwenden'}
+          <LinkIcon size={18} strokeWidth={2} /> {applying ? 'Wird abgeglichen…' : 'Order anwenden'}
         </button>
       </div>
 
@@ -184,7 +187,7 @@ export default function OrderPage() {
               <strong>Ergebnis</strong>
             </div>
             <button className="btn btn-primary btn-sm" disabled={exporting} onClick={handleExport}>
-              {exporting ? 'Exportiere…' : '💾 Als Excel exportieren'}
+              <Download size={16} strokeWidth={2} /> {exporting ? 'Exportiere…' : 'Als Excel exportieren'}
             </button>
           </div>
           <div className="table-wrapper">
