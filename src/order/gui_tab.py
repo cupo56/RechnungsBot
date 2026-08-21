@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 from src.order.parser import parse_order_source
-from src.order.matcher import read_target_list, apply_order_column
+from src.order.matcher import read_target_list, apply_order_column, NOT_FOUND
 from src.order.exporter import export_order_result
 from src.widgets.upload_zone import UploadZone
 
@@ -18,7 +18,6 @@ _BLUE    = "#1B6EC2"
 _BLUE_DIS = "#9BBFE0"
 _GREEN   = "#16a34a"
 _RED     = "#dc2626"
-_MUTED   = "#64748B"
 
 _EXCEL_FILETYPES = [
     ("Excel-Dateien", "*.xlsx *.xls"),
@@ -164,7 +163,7 @@ class OrderTab:
         self.btn_apply.configure(state="disabled", bg=_BLUE_DIS, cursor="arrow")
         self.btn_export.configure(state="disabled", bg=_BLUE_DIS, cursor="arrow")
         self.btn_reset.configure(state="disabled")
-        self.summary_label.configure(text="")
+        self.summary_label.configure(text="", foreground="")
         self.tree["columns"] = ()
         self.tree.delete(*self.tree.get_children())
 
@@ -194,7 +193,7 @@ class OrderTab:
         self.tree.delete(*self.tree.get_children())
 
         for row in result.rows:
-            tag = "notfound" if row[-1] == "Nicht gefunden" else "found"
+            tag = "notfound" if row[-1] == NOT_FOUND else "found"
             values = ["" if v is None else v for v in row]
             self.tree.insert("", tk.END, values=values, tags=(tag,))
 

@@ -11,6 +11,8 @@ import openpyxl
 from src.compare.parser import _EAN_KW
 from src.order.parser import normalize_ean
 
+NOT_FOUND = "Nicht gefunden"
+
 
 @dataclass
 class TargetList:
@@ -109,6 +111,6 @@ def apply_order_column(target, order_lookup):
             rows.append(padded + [qty])
         else:
             n_not_found += 1
-            rows.append(padded + ["Nicht gefunden"])
+            rows.append(padded + [NOT_FOUND])
 
     return OrderResult(headers=headers, rows=rows, n_matched=n_matched, n_not_found=n_not_found)
