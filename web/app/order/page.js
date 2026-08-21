@@ -6,9 +6,12 @@ import { useToast } from '../utils/useToast';
 import Toast from '../components/Toast';
 import StatusBar from '../components/StatusBar';
 
-// Gleiche Grenze wie beim Haupt-Upload (web/app/page.js): Vercel's Request-Body-
-// Limit liegt bei ~4.5 MB, Base64 bläht die Rohgröße um ~33% auf.
-const MAX_SIZE = 3.3 * 1024 * 1024;
+// Anders als beim Haupt-Upload (web/app/page.js, ein File pro Request) werden
+// hier BEIDE Dateien in einem einzigen Request an /api/order/apply gesendet,
+// daher halbiertes Pro-Datei-Limit: Vercel's Request-Body-Limit liegt bei
+// ~4.5 MB, Base64 bläht die Rohgröße jeder Datei um ~33% auf, macht bei zwei
+// kombinierten Dateien ~4.5 MB in Summe.
+const MAX_SIZE = 1.6 * 1024 * 1024;
 
 async function fileToBase64(file) {
   const buffer = await file.arrayBuffer();
@@ -17,13 +20,17 @@ async function fileToBase64(file) {
 
 function UploadBox({ icon, title, hint, filename, onFileChange, inputId }) {
   return (
-    <div className={`drop-zone ${filename ? 'loaded' : ''}`}>
+    <div
+      className={`drop-zone ${filename ? 'loaded' : ''}`}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => e.preventDefault()}
+    >
       <label htmlFor={inputId} style={{ cursor: 'pointer', display: 'block' }}>
         <span className="drop-zone-icon">{filename ? '✅' : icon}</span>
         <p className="drop-zone-text">{filename ? `${title}: ${filename}` : title}</p>
         {!filename && <p className="drop-zone-hint">{hint}</p>}
       </label>
-      <input id={inputId} type="file" accept=".xlsx,.xls" onChange={onFileChange} />
+      <input id={inputId} type="file" accept=".xlsx" onChange={onFileChange} />
     </div>
   );
 }
@@ -42,8 +49,8 @@ export default function OrderPage() {
       const file = e.target.files?.[0];
       e.target.value = '';
       if (!file) return;
-      if (!/\.(xlsx|xls)$/i.test(file.name)) {
-        setToast({ text: `❌ ${file.name}: nur .xlsx/.xls unterstützt`, type: 'error' });
+      if (!/\.xlsx$/i.test(file.name)) {
+        setToast({ text: `❌ ${file.name}: nur .xlsx unterstützt`, type: 'error' });
         return;
       }
       if (file.size > MAX_SIZE) {
@@ -80,7 +87,7 @@ export default function OrderPage() {
       const data = await resp.json();
       setResult(data);
       const parts = [`✓ ${data.n_matched} gefunden`];
-      if (data.n_not_found) parts.push(`⚠ ${data.n_not_found} nicht gefunden`);
+      if (data.n_not_found) parts.push(`⚠️ ${data.n_not_found} nicht gefunden`);
       setStatus({ text: parts.join('  ·  '), type: data.n_not_found ? 'error' : 'success' });
     } catch (err) {
       setStatus({ text: `Fehler: ${err.message}`, type: 'error' });
@@ -143,7 +150,7 @@ export default function OrderPage() {
         <UploadBox
           icon="📋"
           title="Bestellliste laden"
-          hint="EAN + Order-Menge  (.xlsx, .xls)"
+          hint="EAN + Order-Menge  (.xlsx)"
           filename={sourceFile?.filename}
           inputId="order-source-input"
           onFileChange={handleFileChange(setSourceFile)}
@@ -151,7 +158,7 @@ export default function OrderPage() {
         <UploadBox
           icon="📦"
           title="Ziel-Liste laden"
-          hint="mit EAN-Spalte  (.xlsx, .xls)"
+          hint="mit EAN-Spalte  (.xlsx)"
           filename={targetFile?.filename}
           inputId="order-target-input"
           onFileChange={handleFileChange(setTargetFile)}
