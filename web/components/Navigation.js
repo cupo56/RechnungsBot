@@ -9,6 +9,7 @@ export default function Navigation() {
   const links = [
     { href: '/', label: '📄 Rechnung', desc: 'Rechnungen & Lieferscheine' },
     { href: '/compare', label: '🔍 Vergleich', desc: 'Excel-Listen abgleichen' },
+    { href: '/order', label: '🔗 Order', desc: 'Bestellmengen per EAN übernehmen' },
     { href: '/provision', label: '💰 Provision', desc: 'Abrechnung erstellen' },
     { href: '/credit-note', label: '↩️ Gutschrift', desc: 'Stornos & Gutschriften' },
     { href: '/endkunde', label: '🧍 Endkunde', desc: 'Rechnung für Endkunden manuell erstellen' },
