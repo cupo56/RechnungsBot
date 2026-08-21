@@ -12,7 +12,6 @@ from src.widgets.upload_zone import UploadZone
 _BLUE    = "#1B6EC2"
 _GREEN   = "#16a34a"
 _RED     = "#dc2626"
-_MUTED   = "#64748B"
 
 _STATUS_SORT = {"FEHLT": 0, "FALSCHE_MENGE": 1, "NICHT_BESTELLT": 2, "OK": 3}
 _STATUS_TAG  = {"OK": "ok", "FEHLT": "fehlt", "FALSCHE_MENGE": "menge", "NICHT_BESTELLT": "extra"}

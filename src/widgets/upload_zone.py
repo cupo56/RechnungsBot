@@ -40,7 +40,7 @@ class UploadZone:
         self._token     = 0
         self._hovering  = False
 
-        self._icon  = icon
+        self._icon  = "📂"
         self._text  = hint
         self._color = _MUTED
         self._bg    = _DROP_BG
