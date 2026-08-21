@@ -29,9 +29,9 @@ function UploadBox({ icon, title, hint, filename, onFileChange, inputId }) {
 }
 
 export default function OrderPage() {
-  const [sourceFile, setSourceFile] = useState(null); // { filename, base64 }
-  const [targetFile, setTargetFile] = useState(null); // { filename, base64 }
-  const [result, setResult] = useState(null); // { headers, rows, n_matched, n_not_found }
+  const [sourceFile, setSourceFile] = useState(null);
+  const [targetFile, setTargetFile] = useState(null);
+  const [result, setResult] = useState(null);
   const [applying, setApplying] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [status, setStatus] = useState({ text: '', type: 'idle' });
