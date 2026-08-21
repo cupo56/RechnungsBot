@@ -20,12 +20,16 @@ def export_order_result(headers, rows, output_path):
 
     for col, header in enumerate(headers, start=1):
         cell = ws.cell(row=1, column=col, value=header)
+        if isinstance(header, str) and header.startswith(("=", "+", "-", "@")):
+            cell.data_type = "s"
         cell.font = _BOLD
         cell.fill = _HEADER_FILL
 
     for row_idx, row in enumerate(rows, start=2):
         for col_idx, value in enumerate(row, start=1):
-            ws.cell(row=row_idx, column=col_idx, value=value)
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
+                cell.data_type = "s"
 
     for col_idx, header in enumerate(headers, start=1):
         max_len = len(str(header))

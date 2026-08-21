@@ -138,11 +138,13 @@ class OrderTab:
     # ──────────────────────────────────────────────────────────────
 
     def _on_source_loaded(self, order_lookup):
+        self._invalidate_result()
         self._order_lookup = order_lookup
         self.btn_reset.configure(state="normal")
         self._refresh_apply_btn()
 
     def _on_target_loaded(self, target):
+        self._invalidate_result()
         self._target = target
         self.btn_reset.configure(state="normal")
         self._refresh_apply_btn()
@@ -164,6 +166,13 @@ class OrderTab:
         self.btn_export.configure(state="disabled", bg=_BLUE_DIS, cursor="arrow")
         self.btn_reset.configure(state="disabled")
         self.summary_label.configure(text="", foreground="")
+        self.tree["columns"] = ()
+        self.tree.delete(*self.tree.get_children())
+
+    def _invalidate_result(self):
+        self._result = None
+        self.btn_export.configure(state="disabled", bg=_BLUE_DIS, cursor="arrow")
+        self.summary_label.configure(text="")
         self.tree["columns"] = ()
         self.tree.delete(*self.tree.get_children())
 
