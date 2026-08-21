@@ -266,12 +266,14 @@ def order_apply():
     source_ext = os.path.splitext(source_filename)[1].lower()
     target_ext = os.path.splitext(target_filename)[1].lower()
 
-    source_fd, source_path = tempfile.mkstemp(suffix=source_ext)
-    os.close(source_fd)
-    target_fd, target_path = tempfile.mkstemp(suffix=target_ext)
-    os.close(target_fd)
-
+    source_path = None
+    target_path = None
     try:
+        source_fd, source_path = tempfile.mkstemp(suffix=source_ext)
+        os.close(source_fd)
+        target_fd, target_path = tempfile.mkstemp(suffix=target_ext)
+        os.close(target_fd)
+
         with open(source_path, "wb") as f:
             f.write(base64.b64decode(source_file_base64))
         with open(target_path, "wb") as f:
@@ -299,10 +301,11 @@ def order_apply():
         )
     finally:
         for p in (source_path, target_path):
-            try:
-                os.remove(p)
-            except OSError:
-                pass
+            if p:
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
 
 
 # --- ORDER EXPORT ---
