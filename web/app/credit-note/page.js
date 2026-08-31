@@ -20,6 +20,8 @@ const DEFAULT_CONFIG = {
   default_credit_note_ust_enabled: true,
   default_credit_note_ust_percent: 20.0,
   default_credit_note_girocode_enabled: true,
+  default_credit_note_eu_text_enabled: true,
+  default_credit_note_invoice_note_text: '',
   last_credit_note_recipient: { name: '', street: '', plz_city: '', country: '', phone: '', vat: '' },
   credit_note_customer_templates: {},
 };
@@ -35,6 +37,8 @@ export default function CreditNotePage() {
   const [ustEnabled, setUstEnabled] = useState(true);
   const [ustPercent, setUstPercent] = useState('20.0');
   const [girocodeEnabled, setGirocodeEnabled] = useState(true);
+  const [euTextEnabled, setEuTextEnabled] = useState(true);
+  const [invoiceNoteText, setInvoiceNoteText] = useState('');
 
   // --- State: Customer ---
   const [custName, setCustName] = useState('');
@@ -61,6 +65,8 @@ export default function CreditNotePage() {
     setUstEnabled(cfg.default_credit_note_ust_enabled);
     setUstPercent(String(cfg.default_credit_note_ust_percent));
     setGirocodeEnabled(cfg.default_credit_note_girocode_enabled);
+    setEuTextEnabled(cfg.default_credit_note_eu_text_enabled);
+    setInvoiceNoteText(cfg.default_credit_note_invoice_note_text);
 
     const cust = cfg.last_credit_note_recipient || {};
     setCustName(cust.name || '');
@@ -85,6 +91,8 @@ export default function CreditNotePage() {
       default_credit_note_ust_enabled: ustEnabled,
       default_credit_note_ust_percent: parseFloat(ustPercent.replace(',', '.')) || 20,
       default_credit_note_girocode_enabled: girocodeEnabled,
+      default_credit_note_eu_text_enabled: euTextEnabled,
+      default_credit_note_invoice_note_text: invoiceNoteText,
       last_credit_note_recipient: {
         name: custName,
         street: custStreet,
@@ -96,7 +104,7 @@ export default function CreditNotePage() {
     };
     setConfig(newCfg);
     saveConfig(newCfg);
-  }, [config, invoiceNr, ustEnabled, ustPercent, girocodeEnabled, custName, custStreet, custPlz, custCountry, custPhone, custVat]);
+  }, [config, invoiceNr, ustEnabled, ustPercent, girocodeEnabled, euTextEnabled, invoiceNoteText, custName, custStreet, custPlz, custCountry, custPhone, custVat]);
 
   // ─── Reset Session ────────────────────────────────────
   const resetSession = () => {
@@ -162,6 +170,8 @@ export default function CreditNotePage() {
       ust_enabled: ustEnabled,
       ust_percent: ustPct,
       girocode_enabled: girocodeEnabled,
+      eu_text_enabled: euTextEnabled,
+      invoice_note_text: invoiceNoteText.trim(),
     };
 
     const customerData = {
@@ -258,6 +268,20 @@ export default function CreditNotePage() {
                 onChange={e => setGirocodeEnabled(e.target.checked)} id="chk-girocode" />
               QR-Code (GiroCode)
             </label>
+          </div>
+
+          <div className="checkbox-group">
+            <label className="checkbox-label" title="Steuerfreie, innergemeinschaftliche Lieferung gem. Artikel 6 UStG.">
+              <input type="checkbox" className="checkbox-input" checked={euTextEnabled}
+                onChange={e => setEuTextEnabled(e.target.checked)} id="chk-eu-text" />
+              EU-Lieferungshinweis
+            </label>
+          </div>
+
+          <div className="form-group full-width" style={{ marginTop: 6 }}>
+            <label className="form-label">Rechnungs-Notiz:</label>
+            <textarea className="form-textarea" value={invoiceNoteText}
+              onChange={e => setInvoiceNoteText(e.target.value)} rows={2} id="invoice-note-text" />
           </div>
         </div>
 
