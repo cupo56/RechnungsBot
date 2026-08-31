@@ -1,5 +1,7 @@
 'use client';
 
+import { CheckCircle2, FolderOpen, Trash2 } from 'lucide-react';
+
 export default function DropZone({
   loading, loadedFiles, itemCount, dragOver,
   onDragOver, onDragLeave, onDrop, onBrowse, onFileChange, fileInputRef,
@@ -17,7 +19,13 @@ export default function DropZone({
         onClick={onBrowse}
       >
         <span className="drop-zone-icon">
-          {loading ? <span className="spinner"></span> : loadedFiles.length > 0 ? '✅' : '📂'}
+          {loading ? (
+            <span className="spinner"></span>
+          ) : loadedFiles.length > 0 ? (
+            <CheckCircle2 size={40} strokeWidth={1.5} />
+          ) : (
+            <FolderOpen size={40} strokeWidth={1.5} />
+          )}
         </span>
         <p className="drop-zone-text">
           {loading
@@ -55,7 +63,7 @@ export default function DropZone({
                       ? `${f.count} Positionen · Format: ${f.format}`
                       : `${f.count} Positionen`}
               </span>
-              <button className="loaded-file-remove" onClick={() => removeFile(f.id)} title="Datei entfernen">🗑</button>
+              <button className="loaded-file-remove" onClick={() => removeFile(f.id)} title="Datei entfernen"><Trash2 size={14} strokeWidth={2} /></button>
             </div>
           ))}
         </div>

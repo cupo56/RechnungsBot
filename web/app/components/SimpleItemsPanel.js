@@ -1,6 +1,7 @@
 'use client';
 
 import { formatNumber, formatCurrency } from '../utils/format';
+import { Plus, ClipboardList, Trash2 } from 'lucide-react';
 
 // Shared "add item + editable positions table" UI for provision/page.js and
 // credit-note/page.js (byte-identical JSX in both before this extraction).
@@ -17,7 +18,7 @@ export default function SimpleItemsPanel({
       {/* Entry Box */}
       <div className="panel" style={{ height: 'fit-content' }}>
         <h2 className="panel-title">
-          <span className="panel-title-icon">➕</span> Position hinzufügen
+          <Plus size={16} strokeWidth={2} /> Position hinzufügen
         </h2>
 
         <div className="form-group">
@@ -57,7 +58,7 @@ export default function SimpleItemsPanel({
         <div className="table-wrapper" style={{ maxHeight: '350px' }}>
           {items.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-state-icon">📋</div>
+              <div className="empty-state-icon"><ClipboardList size={40} strokeWidth={1.5} /></div>
               <p className="empty-state-text">Noch keine Positionen erfasst.</p>
             </div>
           ) : (
@@ -105,7 +106,7 @@ export default function SimpleItemsPanel({
                       </td>
                       <td className="text-right">{`€ ${formatNumber(brutto)}`}</td>
                       <td className="text-center">
-                        <button className="table-delete-btn" onClick={() => deleteItem(idx)} title="Position entfernen">🗑</button>
+                        <button className="table-delete-btn" onClick={() => deleteItem(idx)} title="Position entfernen"><Trash2 size={15} strokeWidth={2} /></button>
                       </td>
                     </tr>
                   );

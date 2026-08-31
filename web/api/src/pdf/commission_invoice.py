@@ -392,9 +392,11 @@ class CommissionInvoiceGenerator:
             print(f"[RechnungsBot] GiroCode konnte nicht erzeugt werden: {e}")
 
     def _draw_footer(self, y):
-        """Zeichnet die Fußzeilen-Hinweistexte (Leistungsdatum, Mahnspesen/Gerichtsstand)
-        fix am unteren Seitenrand, mit einem Absatz Abstand zur Bankverbindung
-        (draw_bank_footer, oberste Zeile bei MARGIN_BOTTOM + 3 mm)."""
+        """Zeichnet die Fußzeilen-Hinweistexte fix am unteren Seitenrand, mit einem
+        Absatz Abstand zur Bankverbindung (draw_bank_footer, oberste Zeile bei
+        MARGIN_BOTTOM + 3 mm). Eine gesetzte Rechnungs-Notiz ersetzt die Default-Texte
+        vollständig; sonst werden Leistungsdatum/Mahnspesen-Zeilen gezeigt, optional mit
+        dem EU-Lieferungshinweis darüber."""
         c = self.c
 
         bank_top = MARGIN_BOTTOM + 3 * mm
@@ -402,8 +404,19 @@ class CommissionInvoiceGenerator:
         line1_y = line2_y + 5 * mm
 
         c.setFont("Arial", FONT_SIZE_NORMAL)
-        c.drawString(MARGIN_LEFT, line1_y, FOOTER.get("eu_text_2", "Leistungsdatum ist gleich dem Rechnungsdatum"))
-        c.drawString(MARGIN_LEFT, line2_y, FOOTER.get("eu_text_3", "Beim Zahlungsverzug sind sämtliche Mahn.-und Inkassospesen zu ersetzen.Gerichtsstand ist Wien."))
+
+        custom_text = self.inv.get("invoice_note_text", "").strip()
+        if custom_text:
+            lines = [line.strip() for line in custom_text.splitlines() if line.strip()]
+            text_y = line1_y + (len(lines) - 1) * 5 * mm
+            for line in lines:
+                c.drawString(MARGIN_LEFT, text_y, line)
+                text_y -= 5 * mm
+        else:
+            if self.inv.get("eu_text_enabled", True):
+                c.drawString(MARGIN_LEFT, line1_y + 5 * mm, FOOTER.get("eu_text_1", "Steuerfreie, innergemeinschaftliche Lieferung gem. Artikel 6 UStG."))
+            c.drawString(MARGIN_LEFT, line1_y, FOOTER.get("eu_text_2", "Leistungsdatum ist gleich dem Rechnungsdatum"))
+            c.drawString(MARGIN_LEFT, line2_y, FOOTER.get("eu_text_3", "Beim Zahlungsverzug sind sämtliche Mahn.-und Inkassospesen zu ersetzen.Gerichtsstand ist Wien."))
 
         return y
 

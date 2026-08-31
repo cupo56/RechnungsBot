@@ -2,17 +2,19 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { FileText, GitCompare, Link as LinkIcon, Wallet, Undo2, User, Database, Settings } from 'lucide-react';
 
 export default function Navigation() {
   const pathname = usePathname();
 
   const links = [
-    { href: '/', label: '📄 Rechnung', desc: 'Rechnungen & Lieferscheine' },
-    { href: '/compare', label: '🔍 Vergleich', desc: 'Excel-Listen abgleichen' },
-    { href: '/provision', label: '💰 Provision', desc: 'Abrechnung erstellen' },
-    { href: '/credit-note', label: '↩️ Gutschrift', desc: 'Stornos & Gutschriften' },
-    { href: '/endkunde', label: '🧍 Endkunde', desc: 'Rechnung für Endkunden manuell erstellen' },
-    { href: '/database', label: '🗄️ Datenbank', desc: 'Archiv & Suche' },
+    { href: '/', label: 'Rechnung', icon: FileText, desc: 'Rechnungen & Lieferscheine' },
+    { href: '/compare', label: 'Vergleich', icon: GitCompare, desc: 'Excel-Listen abgleichen' },
+    { href: '/order', label: 'Order', icon: LinkIcon, desc: 'Bestellmengen per EAN übernehmen' },
+    { href: '/provision', label: 'Provision', icon: Wallet, desc: 'Abrechnung erstellen' },
+    { href: '/credit-note', label: 'Gutschrift', icon: Undo2, desc: 'Stornos & Gutschriften' },
+    { href: '/endkunde', label: 'Endkunde', icon: User, desc: 'Rechnung für Endkunden manuell erstellen' },
+    { href: '/database', label: 'Datenbank', icon: Database, desc: 'Archiv & Suche' },
   ];
 
   const handleImport = (e) => {
@@ -52,6 +54,7 @@ export default function Navigation() {
         <div className="nav-links">
           {links.map((link) => {
             const isActive = pathname === link.href;
+            const Icon = link.icon;
             return (
               <Link
                 key={link.href}
@@ -59,18 +62,20 @@ export default function Navigation() {
                 className={`nav-link ${isActive ? 'active' : ''}`}
                 title={link.desc}
               >
+                <Icon size={16} strokeWidth={2} className="nav-link-icon" />
                 {link.label}
               </Link>
             );
           })}
-          
-          <label 
-            className="nav-link" 
+
+          <label
+            className="nav-link"
             style={{ cursor: 'pointer' }}
             title="Einstellungen & Vorlagen importieren (.json)"
           >
-            ⚙️ Import
-            <input 
+            <Settings size={16} strokeWidth={2} className="nav-link-icon" />
+            Import
+            <input
               type="file" 
               accept=".json" 
               style={{ display: 'none' }} 

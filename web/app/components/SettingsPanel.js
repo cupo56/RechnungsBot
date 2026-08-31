@@ -1,5 +1,7 @@
 'use client';
 
+import { Settings } from 'lucide-react';
+
 export default function SettingsPanel({
   invoiceNr, setInvoiceNr,
   invoiceDate, setInvoiceDate,
@@ -17,7 +19,7 @@ export default function SettingsPanel({
   return (
     <div className="panel" id="panel-settings">
       <h2 className="panel-title">
-        <span className="panel-title-icon">⚙️</span> Rechnungseinstellungen
+        <Settings size={16} strokeWidth={2} /> Rechnungseinstellungen
       </h2>
 
       <div className="form-group">

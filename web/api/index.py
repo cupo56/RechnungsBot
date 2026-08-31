@@ -3,6 +3,7 @@ import sys
 import os
 import json
 import base64
+import datetime
 import hmac
 import tempfile
 import uuid
@@ -39,6 +40,14 @@ def _error_response(friendly, status=500, detail=None):
         if not _IS_PRODUCTION:
             body["detail"] = detail
     return jsonify(body), status
+
+
+def _json_safe(value):
+    # openpyxl can yield datetime/date/time objects for date-formatted Excel
+    # cells; jsonify() can't serialize those directly.
+    if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
+        return value.isoformat()
+    return value
 
 
 @app.before_request
@@ -230,6 +239,94 @@ def generate_credit_note():
     except Exception as e:
         return _error_response(
             "Beim Erstellen der Gutschrift ist ein Fehler aufgetreten.",
+            detail=str(e),
+        )
+    finally:
+        if os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+            except OSError:
+                pass
+
+
+# --- ORDER ---
+@app.route('/api/order/apply', methods=['POST'])
+def order_apply():
+    payload = request.json or {}
+    source_filename = payload.get("source_filename", "")
+    source_file_base64 = payload.get("source_file_base64")
+    target_filename = payload.get("target_filename", "")
+    target_file_base64 = payload.get("target_file_base64")
+
+    if not source_filename or not source_file_base64:
+        return jsonify({"error": "Keine Bestellliste hochgeladen."}), 400
+    if not target_filename or not target_file_base64:
+        return jsonify({"error": "Keine Ziel-Liste hochgeladen."}), 400
+
+    source_ext = os.path.splitext(source_filename)[1].lower()
+    target_ext = os.path.splitext(target_filename)[1].lower()
+
+    source_path = None
+    target_path = None
+    try:
+        source_fd, source_path = tempfile.mkstemp(suffix=source_ext)
+        os.close(source_fd)
+        target_fd, target_path = tempfile.mkstemp(suffix=target_ext)
+        os.close(target_fd)
+
+        with open(source_path, "wb") as f:
+            f.write(base64.b64decode(source_file_base64))
+        with open(target_path, "wb") as f:
+            f.write(base64.b64decode(target_file_base64))
+
+        from src.order.parser import parse_order_source
+        from src.order.matcher import read_target_list, apply_order_column
+
+        order_lookup = parse_order_source(source_path)
+        target = read_target_list(target_path)
+        result = apply_order_column(target, order_lookup)
+
+        return jsonify({
+            "headers": result.headers,
+            "rows": [[_json_safe(v) for v in row] for row in result.rows],
+            "n_matched": result.n_matched,
+            "n_not_found": result.n_not_found,
+        })
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return _error_response(
+            "Beim Abgleich der Order-Mengen ist ein Fehler aufgetreten.",
+            detail=str(e),
+        )
+    finally:
+        for p in (source_path, target_path):
+            if p:
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+
+
+# --- ORDER EXPORT ---
+@app.route('/api/order/export', methods=['POST'])
+def order_export():
+    payload = request.json or {}
+    headers = payload.get("headers", [])
+    rows = payload.get("rows", [])
+
+    from src.order.exporter import export_order_result
+
+    output_path = os.path.join(tempfile.gettempdir(), f"order_{uuid.uuid4().hex}.xlsx")
+
+    try:
+        export_order_result(headers, rows, output_path)
+        with open(output_path, "rb") as f:
+            xlsx_b64 = base64.b64encode(f.read()).decode("ascii")
+        return jsonify({"xlsx_base64": xlsx_b64, "filename": "Order-Ergebnis.xlsx"})
+    except Exception as e:
+        return _error_response(
+            "Beim Export des Order-Ergebnisses ist ein Fehler aufgetreten.",
             detail=str(e),
         )
     finally:

@@ -13,6 +13,7 @@ import DropZone from './components/DropZone';
 import SettingsPanel from './components/SettingsPanel';
 import CustomerPanel from './components/CustomerPanel';
 import ItemsTable from './components/ItemsTable';
+import { FileText, RotateCcw, Package } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────
 const DEFAULT_CONFIG = {
@@ -605,13 +606,13 @@ export default function Home() {
       {/* ── Header ── */}
       <header className="app-header" id="app-header">
         <div className="header-content">
-          <h1 className="header-title">📄 RechnungsBot</h1>
+          <h1 className="header-title"><FileText size={26} strokeWidth={2} className="header-title-icon" /> RechnungsBot</h1>
           <p className="header-subtitle">Handelsagentur Adis Sefer — Rechnungen & Lieferscheine automatisch erstellen</p>
         </div>
         <div className="header-actions">
           {loadedFiles.length > 0 && (
             <button className="btn btn-secondary" onClick={resetSession} id="btn-reset">
-              ↺ Alles zurücksetzen
+              <RotateCcw size={16} strokeWidth={2} /> Alles zurücksetzen
             </button>
           )}
         </div>
@@ -684,7 +685,7 @@ export default function Home() {
           disabled={generating || !items.length}
           id="btn-create-invoice"
         >
-          {generating ? <span className="spinner"></span> : '📄'} Rechnung erstellen
+          {generating ? <span className="spinner"></span> : <FileText size={16} strokeWidth={2} />} Rechnung erstellen
         </button>
         <button
           className="btn btn-secondary"
@@ -692,7 +693,7 @@ export default function Home() {
           disabled={generating || !items.length}
           id="btn-create-delivery"
         >
-          📦 Nur Lieferschein
+          <Package size={16} strokeWidth={2} /> Nur Lieferschein
         </button>
       </div>
 

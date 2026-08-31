@@ -11,6 +11,7 @@ import Toast from '../components/Toast';
 import TemplateSelector from '../components/TemplateSelector';
 import StatusBar from '../components/StatusBar';
 import SimpleItemsPanel from '../components/SimpleItemsPanel';
+import { Wallet, RotateCcw, Receipt, Settings, User } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────
 const DEFAULT_CONFIG = {
@@ -20,6 +21,8 @@ const DEFAULT_CONFIG = {
   default_provision_ust_enabled: true,
   default_provision_ust_percent: 20.0,
   default_provision_girocode_enabled: true,
+  default_provision_eu_text_enabled: true,
+  default_provision_invoice_note_text: '',
   last_provision_recipient: { name: '', street: '', plz_city: '', country: '', vat: '' },
   provision_customer_templates: {},
 };
@@ -35,6 +38,8 @@ export default function ProvisionPage() {
   const [ustEnabled, setUstEnabled] = useState(true);
   const [ustPercent, setUstPercent] = useState('20.0');
   const [girocodeEnabled, setGirocodeEnabled] = useState(true);
+  const [euTextEnabled, setEuTextEnabled] = useState(true);
+  const [invoiceNoteText, setInvoiceNoteText] = useState('');
 
   // --- State: Customer ---
   const [custName, setCustName] = useState('');
@@ -60,7 +65,9 @@ export default function ProvisionPage() {
     setUstEnabled(cfg.default_provision_ust_enabled);
     setUstPercent(String(cfg.default_provision_ust_percent));
     setGirocodeEnabled(cfg.default_provision_girocode_enabled);
-    
+    setEuTextEnabled(cfg.default_provision_eu_text_enabled);
+    setInvoiceNoteText(cfg.default_provision_invoice_note_text);
+
     const cust = cfg.last_provision_recipient || {};
     setCustName(cust.name || '');
     setCustStreet(cust.street || '');
@@ -91,6 +98,8 @@ export default function ProvisionPage() {
       default_provision_ust_enabled: ustEnabled,
       default_provision_ust_percent: parseFloat(ustPercent.replace(',', '.')) || 20,
       default_provision_girocode_enabled: girocodeEnabled,
+      default_provision_eu_text_enabled: euTextEnabled,
+      default_provision_invoice_note_text: invoiceNoteText,
       last_provision_recipient: {
         name: custName,
         street: custStreet,
@@ -104,7 +113,7 @@ export default function ProvisionPage() {
     if (incrementNr) {
       setInvoiceNr(`${nr + 1}/${year}`);
     }
-  }, [config, invoiceNr, ustEnabled, ustPercent, girocodeEnabled, custName, custStreet, custPlz, custCountry, custVat]);
+  }, [config, invoiceNr, ustEnabled, ustPercent, girocodeEnabled, euTextEnabled, invoiceNoteText, custName, custStreet, custPlz, custCountry, custVat]);
 
   // ─── Reset Session ────────────────────────────────────
   const resetSession = () => {
@@ -165,6 +174,8 @@ export default function ProvisionPage() {
       ust_enabled: ustEnabled,
       ust_percent: ustPct,
       girocode_enabled: girocodeEnabled,
+      eu_text_enabled: euTextEnabled,
+      invoice_note_text: invoiceNoteText.trim(),
     };
 
     const customerData = {
@@ -209,13 +220,13 @@ export default function ProvisionPage() {
       {/* ── Header ── */}
       <header className="app-header" id="app-header">
         <div className="header-content">
-          <h1 className="header-title">💰 Provisionsrechnung</h1>
+          <h1 className="header-title"><Wallet size={26} strokeWidth={2} className="header-title-icon" /> Provisionsrechnung</h1>
           <p className="header-subtitle">Provisionsrechnungen für Vermittlungsgeschäfte manuell erfassen und generieren</p>
         </div>
         <div className="header-actions">
           {items.length > 0 && (
             <button className="btn btn-secondary" onClick={resetSession}>
-              ↺ Neue Provisionsrechnung
+              <RotateCcw size={16} strokeWidth={2} /> Neue Provisionsrechnung
             </button>
           )}
         </div>
@@ -226,7 +237,7 @@ export default function ProvisionPage() {
         {/* Settings Panel */}
         <div className="panel" id="panel-settings">
           <h2 className="panel-title">
-            <span className="panel-title-icon">⚙️</span> Einstellungen
+            <Settings size={16} strokeWidth={2} /> Einstellungen
           </h2>
 
           <div className="form-group">
@@ -261,12 +272,26 @@ export default function ProvisionPage() {
               QR-Code (GiroCode)
             </label>
           </div>
+
+          <div className="checkbox-group">
+            <label className="checkbox-label" title="Steuerfreie, innergemeinschaftliche Lieferung gem. Artikel 6 UStG.">
+              <input type="checkbox" className="checkbox-input" checked={euTextEnabled}
+                onChange={e => setEuTextEnabled(e.target.checked)} id="chk-eu-text" />
+              EU-Lieferungshinweis
+            </label>
+          </div>
+
+          <div className="form-group full-width" style={{ marginTop: 6 }}>
+            <label className="form-label">Rechnungs-Notiz:</label>
+            <textarea className="form-textarea" value={invoiceNoteText}
+              onChange={e => setInvoiceNoteText(e.target.value)} rows={2} id="invoice-note-text" />
+          </div>
         </div>
 
         {/* Customer Panel */}
         <div className="panel" id="panel-customer">
           <h2 className="panel-title">
-            <span className="panel-title-icon">👤</span> Empfänger
+            <User size={16} strokeWidth={2} /> Empfänger
           </h2>
 
           <TemplateSelector
@@ -327,7 +352,7 @@ export default function ProvisionPage() {
           onClick={generateInvoice}
           disabled={generating || !items.length}
         >
-          {generating ? <span className="spinner"></span> : '📑'} Provisionsrechnung erstellen
+          {generating ? <span className="spinner"></span> : <Receipt size={16} strokeWidth={2} />} Provisionsrechnung erstellen
         </button>
       </div>
 

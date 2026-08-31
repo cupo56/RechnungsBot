@@ -12,6 +12,7 @@ import Toast from '../components/Toast';
 import TemplateSelector from '../components/TemplateSelector';
 import StatusBar from '../components/StatusBar';
 import ManualInvoiceItemsPanel from '../components/ManualInvoiceItemsPanel';
+import { User, RotateCcw, Settings, FileText, Package } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────
 // last_invoice_number / last_invoice_year are intentionally the SAME config
@@ -285,13 +286,13 @@ export default function EndkundePage() {
       {/* ── Header ── */}
       <header className="app-header" id="app-header">
         <div className="header-content">
-          <h1 className="header-title">🧍 Endkunden-Rechnung</h1>
+          <h1 className="header-title"><User size={26} strokeWidth={2} className="header-title-icon" /> Endkunden-Rechnung</h1>
           <p className="header-subtitle">Rechnungen für Endkunden (z.B. Kaufland-Marktplatz) manuell erfassen</p>
         </div>
         <div className="header-actions">
           {items.length > 0 && (
             <button className="btn btn-secondary" onClick={resetSession}>
-              ↺ Neue Endkunden-Rechnung
+              <RotateCcw size={16} strokeWidth={2} /> Neue Endkunden-Rechnung
             </button>
           )}
         </div>
@@ -302,7 +303,7 @@ export default function EndkundePage() {
         {/* Settings Panel */}
         <div className="panel" id="panel-settings">
           <h2 className="panel-title">
-            <span className="panel-title-icon">⚙️</span> Einstellungen
+            <Settings size={16} strokeWidth={2} /> Einstellungen
           </h2>
 
           <div className="form-group">
@@ -362,7 +363,7 @@ export default function EndkundePage() {
         {/* Customer Panel */}
         <div className="panel" id="panel-customer">
           <h2 className="panel-title">
-            <span className="panel-title-icon">👤</span> Empfänger
+            <User size={16} strokeWidth={2} /> Empfänger
           </h2>
 
           <TemplateSelector
@@ -417,14 +418,14 @@ export default function EndkundePage() {
           onClick={() => generateInvoice('invoice')}
           disabled={generating || !items.length}
         >
-          {generating ? <span className="spinner"></span> : '📄'} Rechnung erstellen
+          {generating ? <span className="spinner"></span> : <FileText size={16} strokeWidth={2} />} Rechnung erstellen
         </button>
         <button
           className="btn btn-secondary"
           onClick={() => generateInvoice('delivery_only')}
           disabled={generating || !items.length}
         >
-          📦 Nur Lieferschein
+          <Package size={16} strokeWidth={2} /> Nur Lieferschein
         </button>
       </div>
 

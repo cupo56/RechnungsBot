@@ -1,6 +1,7 @@
 'use client';
 
 import TemplateSelector from './TemplateSelector';
+import { User } from 'lucide-react';
 
 export default function CustomerPanel({
   templateNames, selectedTemplate, onTemplateSelect, saveTemplate, deleteTemplate,
@@ -13,7 +14,7 @@ export default function CustomerPanel({
   return (
     <div className="panel" id="panel-customer">
       <h2 className="panel-title">
-        <span className="panel-title-icon">👤</span> Kundenadresse
+        <User size={16} strokeWidth={2} /> Kundenadresse
       </h2>
 
       <TemplateSelector
