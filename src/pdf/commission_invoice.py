@@ -394,7 +394,10 @@ class CommissionInvoiceGenerator:
     def _draw_footer(self, y):
         """Zeichnet die Fußzeilen-Hinweistexte (Leistungsdatum, Mahnspesen/Gerichtsstand)
         fix am unteren Seitenrand, mit einem Absatz Abstand zur Bankverbindung
-        (draw_bank_footer, oberste Zeile bei MARGIN_BOTTOM + 3 mm)."""
+        (draw_bank_footer, oberste Zeile bei MARGIN_BOTTOM + 3 mm).
+
+        Ist eine Rechnungs-Notiz gesetzt (``invoice_note_text``), ersetzt deren Text
+        die Standard-Hinweiszeilen — analog zu ``InvoiceGenerator._draw_footer``."""
         c = self.c
 
         bank_top = MARGIN_BOTTOM + 3 * mm
@@ -402,6 +405,18 @@ class CommissionInvoiceGenerator:
         line1_y = line2_y + 5 * mm
 
         c.setFont("Arial", FONT_SIZE_NORMAL)
+
+        custom_text = str(self.inv.get("invoice_note_text", "") or "").strip()
+        if custom_text:
+            lines = [ln.strip() for ln in custom_text.splitlines() if ln.strip()]
+            # Die Notiz wächst nach oben, damit der Abstand zur Bankverbindung
+            # unabhängig von der Zeilenanzahl gleich bleibt.
+            note_y = line2_y + (len(lines) - 1) * 5 * mm
+            for line in lines:
+                c.drawString(MARGIN_LEFT, note_y, line)
+                note_y -= 5 * mm
+            return y
+
         c.drawString(MARGIN_LEFT, line1_y, FOOTER.get("eu_text_2", "Leistungsdatum ist gleich dem Rechnungsdatum"))
         c.drawString(MARGIN_LEFT, line2_y, FOOTER.get("eu_text_3", "Beim Zahlungsverzug sind sämtliche Mahn.-und Inkassospesen zu ersetzen.Gerichtsstand ist Wien."))
 
