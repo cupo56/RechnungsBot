@@ -351,6 +351,7 @@ class CommissionInvoiceGenerator:
         c.setFont("Arial-Bold", FONT_SIZE_NORMAL)
         c.drawRightString(SUMMARY_LABEL_R, y, "Gesamtsumme Brutto")
         c.drawRightString(COL_GP_R, y, _format_currency(brutto))
+        self._brutto_baseline_y = y
         y -= 8 * mm
 
         return y
@@ -392,33 +393,42 @@ class CommissionInvoiceGenerator:
             print(f"[RechnungsBot] GiroCode konnte nicht erzeugt werden: {e}")
 
     def _draw_footer(self, y):
-        """Zeichnet die Fußzeilen-Hinweistexte (Leistungsdatum, Mahnspesen/Gerichtsstand)
-        fix am unteren Seitenrand, mit einem Absatz Abstand zur Bankverbindung
-        (draw_bank_footer, oberste Zeile bei MARGIN_BOTTOM + 3 mm).
+        """Zeichnet den Hinweisblock zwei Zeilen unterhalb der Zeile
+        "Gesamtsumme Brutto" — also direkt am Summenblock statt fix am Seitenfuß.
 
         Ist eine Rechnungs-Notiz gesetzt (``invoice_note_text``), ersetzt deren Text
         die Standard-Hinweiszeilen — analog zu ``InvoiceGenerator._draw_footer``."""
         c = self.c
 
-        bank_top = MARGIN_BOTTOM + 3 * mm
-        line2_y = bank_top + 3 * ROW_HEIGHT
-        line1_y = line2_y + 5 * mm
-
-        c.setFont("Arial", FONT_SIZE_NORMAL)
+        # Gleicher Zeilenabstand wie im Summenblock (Netto/Ust./Brutto).
+        line_gap = 5 * mm
 
         custom_text = str(self.inv.get("invoice_note_text", "") or "").strip()
         if custom_text:
             lines = [ln.strip() for ln in custom_text.splitlines() if ln.strip()]
-            # Die Notiz wächst nach oben, damit der Abstand zur Bankverbindung
-            # unabhängig von der Zeilenanzahl gleich bleibt.
-            note_y = line2_y + (len(lines) - 1) * 5 * mm
-            for line in lines:
-                c.drawString(MARGIN_LEFT, note_y, line)
-                note_y -= 5 * mm
+        else:
+            lines = [
+                FOOTER.get("eu_text_2", "Leistungsdatum ist gleich dem Rechnungsdatum"),
+                FOOTER.get("eu_text_3", "Beim Zahlungsverzug sind sämtliche Mahn.-und Inkassospesen zu ersetzen.Gerichtsstand ist Wien."),
+            ]
+
+        if not lines:
             return y
 
-        c.drawString(MARGIN_LEFT, line1_y, FOOTER.get("eu_text_2", "Leistungsdatum ist gleich dem Rechnungsdatum"))
-        c.drawString(MARGIN_LEFT, line2_y, FOOTER.get("eu_text_3", "Beim Zahlungsverzug sind sämtliche Mahn.-und Inkassospesen zu ersetzen.Gerichtsstand ist Wien."))
+        # Zwei Zeilen Abstand unter der Brutto-Grundlinie.
+        text_y = getattr(self, "_brutto_baseline_y", y) - 2 * line_gap
+
+        # Bei vielen Zeilen den Block so weit nach oben schieben, dass die letzte
+        # Zeile nicht in die Bankverbindung (draw_bank_footer) hineinläuft.
+        min_last_y = MARGIN_BOTTOM + 3 * mm + 3 * ROW_HEIGHT
+        last_y = text_y - (len(lines) - 1) * line_gap
+        if last_y < min_last_y:
+            text_y += min_last_y - last_y
+
+        c.setFont("Arial", FONT_SIZE_NORMAL)
+        for line in lines:
+            c.drawString(MARGIN_LEFT, text_y, line)
+            text_y -= line_gap
 
         return y
 
