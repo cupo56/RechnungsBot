@@ -20,6 +20,7 @@ const DEFAULT_CONFIG = {
   default_provision_ust_enabled: true,
   default_provision_ust_percent: 20.0,
   default_provision_girocode_enabled: true,
+  default_provision_note_text: '',
   last_provision_recipient: { name: '', street: '', plz_city: '', country: '', vat: '' },
   provision_customer_templates: {},
 };
@@ -35,6 +36,7 @@ export default function ProvisionPage() {
   const [ustEnabled, setUstEnabled] = useState(true);
   const [ustPercent, setUstPercent] = useState('20.0');
   const [girocodeEnabled, setGirocodeEnabled] = useState(true);
+  const [noteText, setNoteText] = useState('');
 
   // --- State: Customer ---
   const [custName, setCustName] = useState('');
@@ -60,6 +62,7 @@ export default function ProvisionPage() {
     setUstEnabled(cfg.default_provision_ust_enabled);
     setUstPercent(String(cfg.default_provision_ust_percent));
     setGirocodeEnabled(cfg.default_provision_girocode_enabled);
+    setNoteText(cfg.default_provision_note_text || '');
     
     const cust = cfg.last_provision_recipient || {};
     setCustName(cust.name || '');
@@ -91,6 +94,7 @@ export default function ProvisionPage() {
       default_provision_ust_enabled: ustEnabled,
       default_provision_ust_percent: parseFloat(ustPercent.replace(',', '.')) || 20,
       default_provision_girocode_enabled: girocodeEnabled,
+      default_provision_note_text: noteText,
       last_provision_recipient: {
         name: custName,
         street: custStreet,
@@ -104,7 +108,7 @@ export default function ProvisionPage() {
     if (incrementNr) {
       setInvoiceNr(`${nr + 1}/${year}`);
     }
-  }, [config, invoiceNr, ustEnabled, ustPercent, girocodeEnabled, custName, custStreet, custPlz, custCountry, custVat]);
+  }, [config, invoiceNr, ustEnabled, ustPercent, girocodeEnabled, noteText, custName, custStreet, custPlz, custCountry, custVat]);
 
   // ─── Reset Session ────────────────────────────────────
   const resetSession = () => {
@@ -165,6 +169,7 @@ export default function ProvisionPage() {
       ust_enabled: ustEnabled,
       ust_percent: ustPct,
       girocode_enabled: girocodeEnabled,
+      invoice_note_text: noteText.trim(),
     };
 
     const customerData = {
@@ -260,6 +265,12 @@ export default function ProvisionPage() {
                 onChange={e => setGirocodeEnabled(e.target.checked)} id="chk-girocode" />
               QR-Code (GiroCode)
             </label>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="provision-note-text">Rechnungs-Notiz:</label>
+            <textarea id="provision-note-text" className="form-textarea" value={noteText}
+              onChange={e => setNoteText(e.target.value)} rows={2} />
           </div>
         </div>
 
